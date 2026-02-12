@@ -92,9 +92,9 @@ class _TracelyMainScreenState extends State<TracelyMainScreen> {
     const LandingScreen(),
     const AuthScreen(),
     const HomeScreen(),
-    const WorkspacesScreen(),
+    const WorkspaceScreen(),
     const RequestStudioScreen(),
-    const CollectionsScreen(),
+    const Placeholder(), // CollectionScreen requires workspace
     const ReplayScreen(),
     const TracesScreen(),
     const GovernanceScreen(),

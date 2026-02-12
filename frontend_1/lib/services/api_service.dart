@@ -67,14 +67,53 @@ class ApiService {
     return await _getHeaders(includeAuth: includeAuth);
   }
   
-  // Generic request handler
-  Future<Map<String, dynamic>> _handleResponse(http.Response response) async {
+  // Generic request handler with automatic token refresh
+  Future<Map<String, dynamic>> _handleResponse(http.Response response, {String? originalBody}) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isNotEmpty) {
         return json.decode(response.body);
       }
       return {'success': true};
     } else if (response.statusCode == 401) {
+      // Try to refresh token automatically
+      if (_refreshToken != null && _refreshToken!.isNotEmpty) {
+        try {
+          final refreshResponse = await http.post(
+            Uri.parse('$baseUrl/auth/refresh'),
+            headers: await _getHeaders(includeAuth: false),
+            body: json.encode({'refresh_token': _refreshToken}),
+          );
+
+          if (refreshResponse.statusCode == 200) {
+            final refreshData = json.decode(refreshResponse.body);
+            if (refreshData['access_token'] != null) {
+              await saveTokens(refreshData['access_token'], _refreshToken!);
+
+              // Retry the original request with new token
+              final originalRequest = http.Request(
+                response.request!.method,
+                response.request!.url,
+              )..headers.addAll(await _getHeaders(includeAuth: true));
+
+              if (originalBody != null) {
+                originalRequest.body = originalBody;
+              }
+
+              final client = http.Client();
+              final retryResponse = await client.send(originalRequest);
+              final retryBody = await retryResponse.stream.bytesToString();
+              final retryHttpResponse = http.Response(retryBody, retryResponse.statusCode, request: retryResponse.request);
+
+              return _handleResponse(retryHttpResponse, originalBody: originalBody);
+            }
+          }
+        } catch (e) {
+          // Token refresh failed, clear tokens and throw original error
+          await clearTokens();
+        }
+      }
+
+      // If we reach here, token refresh failed or wasn't attempted
       await clearTokens();
       throw Exception('Unauthorized - Please login again');
     } else {

@@ -110,24 +110,23 @@ class WorkspaceProvider with ChangeNotifier {
     );
   }
   
-  Future<bool> updateWorkspace(String workspaceId, String name, {String? description}) async {
+  Future<bool> updateWorkspace(String workspaceId, Map<String, dynamic> data) async {
     try {
       _errorMessage = null;
       _isLoading = true;
       notifyListeners();
-      
-      await _apiService.updateWorkspace(workspaceId, name, description: description);
-      
+
+      await _apiService.updateWorkspace(workspaceId, data['name'], description: data['description']);
+
       // Update local workspace
       final index = _workspaces.indexWhere((w) => w['id'] == workspaceId);
       if (index != -1) {
         _workspaces[index] = {
           ..._workspaces[index],
-          'name': name,
-          if (description != null) 'description': description,
+          ...data,
         };
       }
-      
+
       _isLoading = false;
       notifyListeners();
       return true;

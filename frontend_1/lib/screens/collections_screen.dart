@@ -1,20 +1,29 @@
+// lib/screens/collections_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/collection_provider.dart';
+import '../providers/request_provider.dart';
+import '../screens/request_studio_screen.dart';
 import '../providers/workspace_provider.dart';
-import '../providers/auth_provider.dart';
 
-class CollectionsScreen extends StatefulWidget {
-  const CollectionsScreen({Key? key}) : super(key: key);
+class CollectionScreen extends StatefulWidget {
+  final Map<String, dynamic> workspace;
+
+  const CollectionScreen({
+    Key? key,
+    required this.workspace,
+  }) : super(key: key);
 
   @override
-  State<CollectionsScreen> createState() => _CollectionsScreenState();
+  State<CollectionScreen> createState() => _CollectionScreenState();
 }
 
-class _CollectionsScreenState extends State<CollectionsScreen> {
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  Map<String, bool> _expandedCollections = {};
+class _CollectionScreenState extends State<CollectionScreen> {
+  String _searchQuery = '';
+  String? _selectedCollectionId;
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _collectionNameController = TextEditingController();
+  final TextEditingController _collectionDescController = TextEditingController();
 
   @override
   void initState() {
@@ -24,112 +33,100 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
+  Future<void> _loadCollections() async {
+    await context.read<CollectionProvider>().fetchCollections(widget.workspace['id']);
   }
 
-  void _loadCollections() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
-    
-    if (!authProvider.isAuthenticated) {
-      return;
-    }
-
-    // Load workspaces if not loaded
-    if (workspaceProvider.workspaces.isEmpty) {
-      workspaceProvider.loadWorkspaces().then((_) {
-        if (workspaceProvider.selectedWorkspaceId != null) {
-          Provider.of<CollectionProvider>(context, listen: false)
-              .loadCollections(workspaceProvider.selectedWorkspaceId!);
-        }
-      });
-    } else if (workspaceProvider.selectedWorkspaceId != null) {
-      Provider.of<CollectionProvider>(context, listen: false)
-          .loadCollections(workspaceProvider.selectedWorkspaceId!);
-    }
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value.toLowerCase();
+    });
   }
 
-  Future<void> _showCreateCollectionDialog() async {
-    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
-
-    if (workspaceProvider.selectedWorkspaceId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a workspace first')),
-      );
-      return;
-    }
-
+  Future<void> _createCollection() async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create Collection'),
+        title: const Text('Create New Collection'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
+              controller: _collectionNameController,
+              decoration: InputDecoration(
                 labelText: 'Collection Name',
-                border: OutlineInputBorder(),
+                hintText: 'e.g., User Management',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
+              controller: _collectionDescController,
+              decoration: InputDecoration(
                 labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
+                hintText: 'Describe this collection',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              maxLines: 3,
+              maxLines: 2,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _collectionNameController.clear();
+              _collectionDescController.clear();
+              Navigator.pop(context);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (_nameController.text.isEmpty) {
+              if (_collectionNameController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a name')),
+                  const SnackBar(
+                    content: Text('Collection name is required'),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
                 return;
               }
 
-              final collectionProvider = Provider.of<CollectionProvider>(context, listen: false);
+              final collectionProvider = context.read<CollectionProvider>();
               final success = await collectionProvider.createCollection(
-                workspaceProvider.selectedWorkspaceId!,
-                _nameController.text,
-                description: _descriptionController.text.isEmpty
-                    ? null
-                    : _descriptionController.text,
+                widget.workspace['id'],
+                _collectionNameController.text.trim(),
+                description: _collectionDescController.text.trim(),
               );
 
-              if (success) {
-                _nameController.clear();
-                _descriptionController.clear();
+              if (success && mounted) {
+                _collectionNameController.clear();
+                _collectionDescController.clear();
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Collection created!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(collectionProvider.errorMessage ?? 'Failed to create collection'),
-                    backgroundColor: Colors.red,
+                    content: Text('Collection "${_collectionNameController.text}" created'),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.shade900,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             child: const Text('Create'),
           ),
         ],
@@ -137,474 +134,308 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
     );
   }
 
-  Future<void> _showUpdateCollectionDialog(Map<String, dynamic> collection) async {
-    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
-    _nameController.text = collection['name'] ?? '';
-    _descriptionController.text = collection['description'] ?? '';
-
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Update Collection'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Collection Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
+  Future<void> _createNewRequest() async {
+    if (_selectedCollectionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a collection first'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (_nameController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a name')),
-                );
-                return;
-              }
-
-              final collectionProvider = Provider.of<CollectionProvider>(context, listen: false);
-              final success = await collectionProvider.updateCollection(
-                workspaceProvider.selectedWorkspaceId!,
-                collection['id'],
-                _nameController.text,
-                description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-              );
-
-              if (success) {
-                _nameController.clear();
-                _descriptionController.clear();
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Collection updated!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(collectionProvider.errorMessage ?? 'Failed to update collection'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showDeleteCollectionDialog(Map<String, dynamic> collection) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Collection'),
-        content: Text('Delete "${collection['name']}"? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
-      final collectionProvider = Provider.of<CollectionProvider>(context, listen: false);
-      final success = await collectionProvider.deleteCollection(
-        workspaceProvider.selectedWorkspaceId!,
-        collection['id'],
       );
-
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Collection deleted!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(collectionProvider.errorMessage ?? 'Failed to delete collection'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      return;
     }
+
+    // Navigate to Request Studio
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RequestStudioScreen(),
+      ),
+    ).then((_) {
+      // Refresh requests when returning
+      setState(() {});
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<CollectionProvider, WorkspaceProvider, AuthProvider>(
-      builder: (context, collectionProvider, workspaceProvider, authProvider, child) {
-        // Check authentication
-        if (!authProvider.isAuthenticated) {
-          return _buildUnauthenticatedView();
-        }
-
-        // Check workspace selection
-        if (workspaceProvider.selectedWorkspaceId == null) {
-          return _buildNoWorkspaceView();
-        }
-
-        // Show loading
-        if (collectionProvider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        return Container(
-          color: const Color(0xFFFAFAFA),
-          child: Column(
-            children: [
-              _buildTopBar(authProvider),
-              Expanded(
-                child: Row(
-                  children: [
-                    // Left Panel - Tree View
-                    Container(
-                      width: 320,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border(right: BorderSide(color: Colors.grey.shade200)),
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: Row(
+        children: [
+          // Left Sidebar - Collections
+          Container(
+            width: 300,
+            color: Colors.white,
+            child: Column(
+              children: [
+                // Workspace header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade900,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.workspaces_outlined,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      child: Column(
-                        children: [
-                          Container(
-                            height: 60,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Colors.grey.shade200),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.workspace['name'] ?? 'Workspace',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Collections',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Collections',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade900,
-                                  ),
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  icon: const Icon(Icons.add, size: 20),
-                                  onPressed: _showCreateCollectionDialog,
-                                  color: Colors.grey.shade700,
-                                  tooltip: 'Create Collection',
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: collectionProvider.collections.isEmpty
-                                ? _buildEmptyCollections()
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(12),
-                                    itemCount: collectionProvider.collections.length,
-                                    itemBuilder: (context, index) {
-                                      final collection = collectionProvider.collections[index];
-                                      return _buildCollectionTreeItem(
-                                        collection,
-                                        collectionProvider,
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Search collections
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search collections...',
+                      prefixIcon: const Icon(Icons.search, size: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
                     ),
-
-                    // Right Panel - Documentation
-                    Expanded(
-                      child: collectionProvider.selectedCollection != null
-                          ? _buildCollectionDetails(collectionProvider.selectedCollection!)
-                          : _buildNoSelectionView(),
-                    ),
-                  ],
+                    onChanged: _onSearchChanged,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
-  Widget _buildUnauthenticatedView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.lock_outline, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            'Please login to view collections',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoWorkspaceView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.folder_off_outlined, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            'Please select a workspace first',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Go to Workspaces screen to select or create one',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyCollections() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.collections_bookmark_outlined, 
-                size: 48, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              'No collections yet',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Click the + button to create your first collection',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNoSelectionView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.arrow_back, size: 48, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            'Select a collection to view details',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar(AuthProvider authProvider) {
-    return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Tracely',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade900,
-            ),
-          ),
-          const SizedBox(width: 60),
-          Text(
-            'Collections',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade900,
-            ),
-          ),
-          const Spacer(),
-          if (authProvider.isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.logout, size: 20),
-              onPressed: () async {
-                await authProvider.logout();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Logged out')),
-                );
-              },
-              tooltip: 'Logout',
-            ),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey.shade900,
-            child: const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCollectionTreeItem(
-    Map<String, dynamic> collection,
-    CollectionProvider provider,
-  ) {
-    final collectionId = collection['id'] ?? '';
-    final isExpanded = _expandedCollections[collectionId] ?? false;
-    final isSelected = provider.selectedCollection?['id'] == collectionId;
-
-    return Column(
-      children: [
-        InkWell(
-          onTap: () {
-            provider.selectCollection(collection);
-            setState(() {
-              _expandedCollections[collectionId] = !isExpanded;
-            });
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.blue.shade50 : 
-                     isExpanded ? Colors.grey.shade50 : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected ? Border.all(color: Colors.blue.shade200) : null,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isExpanded ? Icons.folder_open : Icons.folder,
-                  size: 18,
-                  color: isSelected ? Colors.blue.shade600 : Colors.grey.shade700,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    collection['name'] ?? 'Unnamed Collection',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected ? Colors.blue.shade900 : Colors.grey.shade900,
+                // New Collection button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _createCollection,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('New Collection'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
                     ),
                   ),
                 ),
-                Icon(
-                  isExpanded ? Icons.expand_more : Icons.chevron_right,
-                  size: 18,
-                  color: Colors.grey.shade500,
+
+                const SizedBox(height: 16),
+
+                // Collections list
+                Expanded(
+                  child: Consumer<CollectionProvider>(
+                    builder: (context, collectionProvider, child) {
+                      final collections = collectionProvider
+                          .getCollectionsByWorkspace(widget.workspace['id'])
+                          .where((collection) {
+                        final name = collection['name']?.toString().toLowerCase() ?? '';
+                        return _searchQuery.isEmpty || name.contains(_searchQuery);
+                      }).toList();
+
+                      if (collections.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.folder_outlined,
+                                size: 48,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchQuery.isEmpty
+                                    ? 'No collections yet'
+                                    : 'No matching collections',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              if (_searchQuery.isEmpty)
+                                Text(
+                                  'Create your first collection',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: collections.length,
+                        itemBuilder: (context, index) {
+                          final collection = collections[index];
+                          final isSelected = _selectedCollectionId == collection['id'];
+                          final requestCount = collectionProvider
+                              .getRequestsByCollection(collection['id']).length;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.grey.shade100 : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.grey.shade900
+                                      : Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(
+                                  Icons.folder,
+                                  size: 16,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                              title: Text(
+                                collection['name'] ?? 'Untitled',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.grey.shade900
+                                      : Colors.grey.shade800,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '$requestCount ${requestCount == 1 ? 'request' : 'requests'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                              selected: isSelected,
+                              onTap: () {
+                                setState(() {
+                                  _selectedCollectionId = collection['id'];
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-        if (isExpanded && collection['requests'] != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: Column(
-              children: (collection['requests'] as List).map((request) {
-                return _buildRequestItem(
-                  request['name'] ?? 'Unnamed Request',
-                  request['method'] ?? 'GET',
-                );
-              }).toList(),
-            ),
+
+          // Right Content - Requests
+          Expanded(
+            child: _selectedCollectionId == null
+                ? _buildNoCollectionSelected()
+                : _buildRequestsView(),
           ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildRequestItem(String name, String method) {
-    Color methodColor = method == 'GET'
-        ? Colors.blue.shade600
-        : method == 'POST'
-            ? Colors.green.shade600
-            : method == 'PUT'
-                ? Colors.orange.shade600
-                : method == 'DELETE'
-                    ? Colors.red.shade600
-                    : Colors.grey.shade600;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
+  Widget _buildNoCollectionSelected() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              color: methodColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
             ),
-            child: Text(
-              method,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: methodColor,
-              ),
+            child: Icon(
+              Icons.folder_outlined,
+              size: 40,
+              color: Colors.grey.shade500,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade700,
+          const SizedBox(height: 16),
+          Text(
+            'No Collection Selected',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select a collection from the sidebar to view its requests',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _createCollection,
+            icon: const Icon(Icons.add),
+            label: const Text('Create New Collection'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.shade900,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
           ),
@@ -613,142 +444,306 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
     );
   }
 
-  Widget _buildCollectionDetails(Map<String, dynamic> collection) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.folder_open,
-                    color: Colors.blue.shade400, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      collection['name'] ?? 'Unnamed Collection',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                    Text(
-                      '${collection['request_count'] ?? 0} requests • Created ${_formatDate(collection['created_at'])}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _buildDocButton('Export', Icons.download),
-              const SizedBox(width: 12),
-              _buildDocButton('Share', Icons.share),
-            ],
-          ),
-          const SizedBox(height: 32),
+  Widget _buildRequestsView() {
+    return Consumer<CollectionProvider>(
+      builder: (context, collectionProvider, child) {
+        final requests = collectionProvider
+            .getRequestsByCollection(_selectedCollectionId!);
+        
+        final collection = collectionProvider.collections
+            .firstWhere((c) => c['id'] == _selectedCollectionId);
 
-          // Description
-          if (collection['description'] != null && collection['description'].toString().isNotEmpty)
+        return Column(
+          children: [
+            // Collection header
             Container(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200),
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    'Description',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
                       color: Colors.grey.shade900,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.folder,
+                      color: Colors.white,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    collection['description'],
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                      height: 1.6,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          collection['name'] ?? 'Collection',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          collection['description'] ?? 'No description',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // New Request button
+                  ElevatedButton.icon(
+                    onPressed: _createNewRequest,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Request'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade900,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            // Requests list
+            Expanded(
+              child: requests.isEmpty
+                  ? _buildEmptyRequests()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: requests.length,
+                      itemBuilder: (context, index) {
+                        final request = requests[index];
+                        return _buildRequestCard(request);
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyRequests() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.link_off,
+              size: 40,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No requests yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Create your first API request in this collection',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _createNewRequest,
+            icon: const Icon(Icons.add),
+            label: const Text('Create New Request'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.shade900,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDocButton(String text, IconData icon) {
-    return InkWell(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$text feature coming soon!')),
-        );
-      },
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: Colors.grey.shade700),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
+  Widget _buildRequestCard(Map<String, dynamic> request) {
+    final method = request['method'] ?? 'GET';
+    final color = _getMethodColor(method);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: InkWell(
+        onTap: () {
+          // Load request and navigate to Request Studio
+          context.read<RequestProvider>().setRequestData(request);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const RequestStudioScreen(),
             ),
-          ],
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      method,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request['name'] ?? 'Untitled Request',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          request['path'] ?? '/api/endpoint',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _formatTimestamp(request['updated_at']),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.description_outlined, size: 14, color: Colors.grey.shade500),
+                  const SizedBox(width: 4),
+                  Text(
+                    request['description'] ?? 'No description',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  String _formatDate(dynamic date) {
-    if (date == null) return 'recently';
+  Color _getMethodColor(String method) {
+    switch (method.toUpperCase()) {
+      case 'GET':
+        return Colors.blue;
+      case 'POST':
+        return Colors.green;
+      case 'PUT':
+        return Colors.amber;
+      case 'DELETE':
+        return Colors.red;
+      case 'PATCH':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatTimestamp(String? timestamp) {
+    if (timestamp == null) return 'N/A';
     try {
-      final dateTime = DateTime.parse(date.toString());
+      final dt = DateTime.parse(timestamp);
       final now = DateTime.now();
-      final difference = now.difference(dateTime);
-      
-      if (difference.inDays > 7) {
-        return '${difference.inDays ~/ 7} weeks ago';
-      } else if (difference.inDays > 0) {
-        return '${difference.inDays} days ago';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours} hours ago';
-      } else {
-        return 'recently';
-      }
+      final diff = now.difference(dt);
+
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${dt.day}/${dt.month}/${dt.year}';
     } catch (e) {
-      return 'recently';
+      return timestamp;
     }
   }
 }

@@ -1,7 +1,8 @@
+// lib/screens/workspace_setup_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/workspace_provider.dart';
-import 'workspace_creation.dart';
+import 'workspaces_screen.dart';
 
 class WorkspaceSetupScreen extends StatefulWidget {
   final Map<String, dynamic>? workspace;
@@ -15,62 +16,56 @@ class WorkspaceSetupScreen extends StatefulWidget {
 class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
   int _selectedTemplate = 0;
   bool _isInitializing = false;
+  final TextEditingController _workspaceNameController = TextEditingController();
+  final TextEditingController _workspaceDescController = TextEditingController();
 
   final List<Map<String, dynamic>> templates = [
     {
       'id': 0,
       'name': 'Blank workspace',
       'icon': Icons.layers_outlined,
-      'color': Colors.blue,
       'description': 'Start fresh with an empty canvas',
     },
     {
       'id': 1,
       'name': 'API demos',
       'icon': Icons.code_outlined,
-      'color': Colors.orange,
       'description': 'Pre-loaded API examples',
     },
     {
       'id': 2,
       'name': 'API development',
       'icon': Icons.build_outlined,
-      'color': Colors.purple,
       'description': 'Full development environment',
     },
     {
       'id': 3,
       'name': 'API testing',
       'icon': Icons.bug_report_outlined,
-      'color': Colors.red,
       'description': 'Testing & validation suite',
     },
     {
       'id': 4,
       'name': 'API security',
       'icon': Icons.security_outlined,
-      'color': Colors.green,
       'description': 'Security & compliance focused',
     },
     {
       'id': 5,
       'name': 'Incident response',
       'icon': Icons.warning_outlined,
-      'color': Colors.amber,
       'description': 'Crisis management setup',
     },
     {
       'id': 6,
       'name': 'Cloud infrastructure',
       'icon': Icons.cloud_outlined,
-      'color': Colors.cyan,
       'description': 'Cloud deployment template',
     },
     {
       'id': 7,
       'name': 'Partner collaboration',
       'icon': Icons.group_outlined,
-      'color': Colors.teal,
       'description': 'Multi-team workspace',
     },
   ];
@@ -94,9 +89,22 @@ class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _workspaceNameController.text = 'My Workspace';
+  }
+
+  @override
+  void dispose() {
+    _workspaceNameController.dispose();
+    _workspaceDescController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 768;
@@ -113,141 +121,243 @@ class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
       children: [
         // Left Panel - Template Selection
         Container(
-          width: 420,
+          width: 440,
           color: Colors.white,
-          padding: const EdgeInsets.all(32),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Close button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+          child: Column(
+            children: [
+              // Header with close button
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade200),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Header
-                Text(
-                  'Create your workspace',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.grey.shade900,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Get the most out of your workspace with a template.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Blank workspace highlighted option
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _selectedTemplate == 0
-                          ? Colors.blue.shade400
-                          : Colors.grey.shade300,
-                      width: _selectedTemplate == 0 ? 2 : 1,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Create workspace',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Get started with a template or blank workspace',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                    color: _selectedTemplate == 0
-                        ? Colors.blue.shade50
-                        : Colors.white,
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.grey.shade600),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Workspace name input
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade200),
                   ),
-                  child: Row(
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Workspace name',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _workspaceNameController,
+                      decoration: InputDecoration(
+                        hintText: 'e.g., My API Workspace',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade900, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Description (optional)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _workspaceDescController,
+                      decoration: InputDecoration(
+                        hintText: 'What is this workspace for?',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade900, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Templates section
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.layers_outlined,
-                          color: Colors.blue.shade600,
-                          size: 24,
+                      Text(
+                        'Templates',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade900,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Blank workspace',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Start with a clean slate',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 16),
+                      // Blank workspace option
+                      _buildTemplateOption(templates[0], _selectedTemplate == 0, 0, isBlank: true),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Explore more templates',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
                         ),
                       ),
-                      if (_selectedTemplate == 0)
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
+                      const SizedBox(height: 16),
+                      // Other templates
+                      ...List.generate(templates.length - 1, (index) {
+                        final template = templates[index + 1];
+                        final isSelected = _selectedTemplate == template['id'];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildTemplateOption(template, isSelected, template['id']),
+                        );
+                      }),
                     ],
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 32),
-
-                // Explore templates title
-                Text(
-                  'Explore our templates',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade900,
-                    letterSpacing: 0.3,
+              // Footer with actions
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.grey.shade200),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Template list
-                ...List.generate(templates.length, (index) {
-                  final template = templates[index];
-                  final isSelected = _selectedTemplate == template['id'];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildTemplateOption(template, isSelected, index),
-                  );
-                }),
-              ],
-            ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Consumer<WorkspaceProvider>(
+                        builder: (context, workspaceProvider, child) {
+                          return ElevatedButton(
+                            onPressed: _isInitializing || workspaceProvider.isLoading
+                                ? null
+                                : _createWorkspace,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey.shade900,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: _isInitializing || workspaceProvider.isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create workspace',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
 
@@ -256,407 +366,172 @@ class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
           child: Container(
             color: Colors.grey.shade50,
             padding: const EdgeInsets.all(48),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Preview header
-                  Text(
-                    templates[_selectedTemplate]['name'],
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.grey.shade900,
-                      letterSpacing: -0.5,
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Preview header
+                Text(
+                  'Preview',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 1,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Customize this space to organize and share your API resources with your team.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey.shade600,
-                      height: 1.6,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  templates[_selectedTemplate]['name'],
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade900,
+                    letterSpacing: -0.5,
                   ),
-                  const SizedBox(height: 48),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  templates[_selectedTemplate]['description'],
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 48),
 
-                  // Preview box
-                  Container(
+                // Preview box
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.grey.shade200,
-                        width: 2,
-                      ),
+                      border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left side - Workspace structure
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Sidebar preview
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey.shade200),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      height: 8,
-                                      width: 40,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade300,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ...List.generate(3, (i) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
-                                        child: Container(
-                                          height: 6,
-                                          width: double.infinity,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(3),
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                                ),
+                        // Workspace preview
+                        Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade900,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(height: 16),
-
-                              // Main area preview with accent
-                              Stack(
+                              child: Icon(
+                                templates[_selectedTemplate]['icon'],
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey.shade300,
-                                        style: BorderStyle.solid,
-                                        strokeAlign: BorderSide.strokeAlignCenter,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Container(
-                                          height: 8,
-                                          width: 60,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Container(
-                                          height: 4,
-                                          width: double.infinity,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          height: 4,
-                                          width: double.infinity,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          height: 4,
-                                          width: 120,
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                      ],
+                                  Text(
+                                    _workspaceNameController.text.isEmpty
+                                        ? 'My Workspace'
+                                        : _workspaceNameController.text,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade900,
                                     ),
                                   ),
-                                  // Accent color element
-                                  Positioned(
-                                    bottom: -8,
-                                    left: 20,
-                                    child: Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: templates[_selectedTemplate]['color']
-                                            .withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(30),
-                                      ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _workspaceDescController.text.isEmpty
+                                        ? templates[_selectedTemplate]['description']
+                                        : _workspaceDescController.text,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const Divider(),
+                        const SizedBox(height: 32),
+                        
+                        // Collections preview
+                        Text(
+                          'Collections',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade900,
                           ),
                         ),
-                        const SizedBox(width: 24),
-
-                        // Right side - Welcome message
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: templates[_selectedTemplate]['color']
-                                      .withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Icon(
-                                  templates[_selectedTemplate]['icon'],
-                                  size: 40,
-                                  color: templates[_selectedTemplate]['color'],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Build your workspace',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Add collections, requests, and team members',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
+                        const SizedBox(height: 16),
+                        ...List.generate(3, (index) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.folder_outlined,
+                                  size: 16,
                                   color: Colors.grey.shade600,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 120,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade300,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        width: 80,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 48),
-
-                  // Features section
-                  ...features.map((feature) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 32),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: templates[_selectedTemplate]['color']
-                                  .withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              feature['icon'],
-                              size: 24,
-                              color: templates[_selectedTemplate]['color'],
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  feature['title'],
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade900,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  feature['description'],
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-
-                  const SizedBox(height: 32),
-
-                  // Action buttons
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
-                          foregroundColor: Colors.grey.shade900,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Consumer<WorkspaceProvider>(
-                        builder: (context, workspaceProvider, child) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  templates[_selectedTemplate]['color'],
-                                  templates[_selectedTemplate]['color'].withOpacity(0.8),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: templates[_selectedTemplate]['color']
-                                      .withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: _isInitializing || workspaceProvider.isLoading
-                                    ? null
-                                    : () async {
-                                        setState(() {
-                                          _isInitializing = true;
-                                        });
-
-                                        try {
-                                          final success = await workspaceProvider.initializeWorkspace(
-                                            templateId: _selectedTemplate,
-                                            name: 'My Workspace', // TODO: Get from user input
-                                            description: templates[_selectedTemplate]['description'],
-                                          );
-
-                                          if (success && mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Workspace created with ${templates[_selectedTemplate]['name']}!',
-                                                ),
-                                                backgroundColor: templates[_selectedTemplate]['color'],
-                                              ),
-                                            );
-                                            Navigator.pop(context);
-                                            // Navigate to workspace screen
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => const CreateWorkspaceScreen(),
-                                              ),
-                                            );
-                                          } else if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  workspaceProvider.errorMessage ?? 'Failed to create workspace',
-                                                ),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Error: $e'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        } finally {
-                                          if (mounted) {
-                                            setState(() {
-                                              _isInitializing = false;
-                                            });
-                                          }
-                                        }
-                                      },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 12,
-                                  ),
-                                  child: _isInitializing || workspaceProvider.isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                          ),
-                                        )
-                                      : Text(
-                                          'Create workspace',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -665,519 +540,198 @@ class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
   }
 
   Widget _buildMobileLayout() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Header with close button
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Create your workspace',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.grey.shade900,
-                          letterSpacing: -0.5,
-                        ),
+    return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Create workspace',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade900,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Get the most out of your workspace with a template.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w400,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Get started with a template',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: Colors.grey.shade600),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
           ),
+        ),
 
-          // Template Selection
-          Container(
-            padding: const EdgeInsets.all(16),
+        // Content
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Blank workspace highlighted option
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _selectedTemplate == 0
-                          ? Colors.blue.shade400
-                          : Colors.grey.shade300,
-                      width: _selectedTemplate == 0 ? 2 : 1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    color: _selectedTemplate == 0
-                        ? Colors.blue.shade50
-                        : Colors.white,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.layers_outlined,
-                          color: Colors.blue.shade600,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Blank workspace',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Start with a clean slate',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_selectedTemplate == 0)
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
-                    ],
+                // Workspace name input
+                Text(
+                  'Workspace name',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Explore templates title
-                Text(
-                  'Explore our templates',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade900,
-                    letterSpacing: 0.3,
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _workspaceNameController,
+                  decoration: InputDecoration(
+                    hintText: 'e.g., My API Workspace',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade900, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
+                
+                Text(
+                  'Description (optional)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _workspaceDescController,
+                  decoration: InputDecoration(
+                    hintText: 'What is this workspace for?',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade900, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 32),
 
+                Text(
+                  'Templates',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
                 // Template list
                 ...List.generate(templates.length, (index) {
                   final template = templates[index];
                   final isSelected = _selectedTemplate == template['id'];
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildTemplateOption(template, isSelected, index),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _buildTemplateOption(template, isSelected, template['id']),
                   );
                 }),
-              ],
-            ),
-          ),
 
-          // Preview Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey.shade50,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Preview header
-                Text(
-                  templates[_selectedTemplate]['name'],
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.grey.shade900,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Customize this space to organize and share your API resources with your team.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    height: 1.6,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Preview box
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey.shade200,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      // Workspace structure preview
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 8,
-                              width: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ...List.generate(3, (i) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Container(
-                                  height: 6,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Main area preview
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.grey.shade300,
-                            style: BorderStyle.solid,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 8,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              height: 4,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 4,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Welcome message
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: templates[_selectedTemplate]['color']
-                                  .withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              templates[_selectedTemplate]['icon'],
-                              size: 40,
-                              color: templates[_selectedTemplate]['color'],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Build your workspace',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.grey.shade900,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Add collections, requests, and team members',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Features section
-                ...features.map((feature) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: templates[_selectedTemplate]['color']
-                                .withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            feature['icon'],
-                            size: 24,
-                            color: templates[_selectedTemplate]['color'],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                feature['title'],
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                feature['description'],
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
                 // Action buttons
-                Column(
+                Row(
                   children: [
-                    Consumer<WorkspaceProvider>(
-                      builder: (context, workspaceProvider, child) {
-                        return Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                templates[_selectedTemplate]['color'],
-                                templates[_selectedTemplate]['color'].withOpacity(0.8),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: templates[_selectedTemplate]['color']
-                                    .withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _isInitializing || workspaceProvider.isLoading
-                                  ? null
-                                  : () async {
-                                      setState(() {
-                                        _isInitializing = true;
-                                      });
-
-                                      try {
-                                        final success = await workspaceProvider.initializeWorkspace(
-                                          templateId: _selectedTemplate,
-                                          name: 'My Workspace',
-                                          description: templates[_selectedTemplate]['description'],
-                                        );
-
-                                        if (success && mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'Workspace created with ${templates[_selectedTemplate]['name']}!',
-                                              ),
-                                              backgroundColor: templates[_selectedTemplate]['color'],
-                                            ),
-                                          );
-                                          Navigator.pop(context);
-                                          // Navigate to workspace screen
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => const CreateWorkspaceScreen(),
-                                            ),
-                                          );
-                                        } else if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                workspaceProvider.errorMessage ?? 'Failed to create workspace',
-                                              ),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      } catch (e) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Error: $e'),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      } finally {
-                                        if (mounted) {
-                                          setState(() {
-                                            _isInitializing = false;
-                                          });
-                                        }
-                                      }
-                                    },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 16,
-                                ),
-                                child: _isInitializing || workspaceProvider.isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                        ),
-                                      )
-                                    : Text(
-                                        'Create workspace',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
+                    Expanded(
+                      child: TextButton(
                         onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
-                          foregroundColor: Colors.grey.shade900,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
-                          ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: Colors.grey.shade300),
                           ),
-                          elevation: 0,
                         ),
-                        child: const Text(
+                        child: Text(
                           'Cancel',
                           style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Consumer<WorkspaceProvider>(
+                        builder: (context, workspaceProvider, child) {
+                          return ElevatedButton(
+                            onPressed: _isInitializing || workspaceProvider.isLoading
+                                ? null
+                                : _createWorkspace,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey.shade900,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: _isInitializing || workspaceProvider.isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -1185,66 +739,149 @@ class _WorkspaceSetupScreenState extends State<WorkspaceSetupScreen> {
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildTemplateOption(
     Map<String, dynamic> template,
     bool isSelected,
-    int index,
-  ) {
-    return Material(
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedTemplate = template['id'];
-          });
-        },
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? template['color'] : Colors.grey.shade300,
-              width: isSelected ? 1.5 : 1,
+    int id, {
+    bool isBlank = false,
+  }) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedTemplate = template['id'];
+        });
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: isSelected ? Colors.grey.shade900 : Colors.grey.shade200,
+            width: isSelected ? 1.5 : 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          color: isSelected ? Colors.grey.shade50 : Colors.white,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.grey.shade900 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                template['icon'],
+                color: isSelected ? Colors.white : Colors.grey.shade600,
+                size: 20,
+              ),
             ),
-            borderRadius: BorderRadius.circular(10),
-            color: isSelected ? template['color'].withOpacity(0.05) : Colors.white,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: template['color'].withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  template['icon'],
-                  color: template['color'],
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  template['name'],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade800,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    template['name'],
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: isSelected ? Colors.grey.shade900 : Colors.grey.shade800,
+                    ),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  if (isBlank) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Start with a clean slate',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (isSelected)
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade900,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: 12,
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _createWorkspace() async {
+    final workspaceProvider = context.read<WorkspaceProvider>();
+
+    setState(() {
+      _isInitializing = true;
+    });
+
+    try {
+      final name = _workspaceNameController.text.trim();
+      if (name.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Workspace name is required'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final success = await workspaceProvider.initializeWorkspace(
+        templateId: _selectedTemplate,
+        name: name,
+        description: _workspaceDescController.text.trim().isEmpty
+            ? templates[_selectedTemplate]['description']
+            : _workspaceDescController.text.trim(),
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Workspace "$name" created successfully!'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
   }
 }

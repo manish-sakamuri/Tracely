@@ -1,16 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../services/api_service.dart';
+import 'dart:convert';
 
 class RequestProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
-  
+
   bool _isLoading = false;
   Map<String, dynamic>? _lastResponse;
   Map<String, dynamic>? _lastRequest;
   String? _error;
   List<Map<String, dynamic>> _history = [];
-  
+
   bool get isLoading => _isLoading;
   Map<String, dynamic>? get lastResponse => _lastResponse;
   Map<String, dynamic>? get lastRequest => _lastRequest;
@@ -22,12 +23,17 @@ class RequestProvider extends ChangeNotifier {
   String _url = '';
   Map<String, String> _headers = {};
   String _body = '';
+  String _name = '';
+  String _collectionId = '';
 
   // Getters for request data
   String get method => _method;
   String get url => _url;
   Map<String, String> get headers => _headers;
   String get body => _body;
+  String get name => _name;
+  String get collectionId => _collectionId;
+  Map<String, dynamic>? get response => _lastResponse;
 
   Future<Map<String, dynamic>> executeRequest({
     required String method,
@@ -164,12 +170,82 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setName(String name) {
+    _name = name;
+    notifyListeners();
+  }
+
+  void setCollectionId(String collectionId) {
+    _collectionId = collectionId;
+    notifyListeners();
+  }
+
+  // Send request method
+Future<Map<String, dynamic>> sendRequest() async {
+  Map<String, dynamic>? bodyMap;
+  if (_body.isNotEmpty) {
+    try {
+      bodyMap = jsonDecode(_body) as Map<String, dynamic>;
+    } catch (e) {
+      // Handle cases where the string isn't valid JSON
+      debugPrint("Invalid JSON format in body: $e");
+      //throw an error or return a specific response here
+    }
+  }
+
+  return executeRequest(
+    method: _method,
+    url: _url,
+    body: bodyMap, // Now matches the required Map<String, dynamic>? type
+    headers: _headers,
+  );
+}
+
+  // Save request method
+  Future<bool> saveRequest() async {
+    try {
+      await _apiService.createRequest(
+        'workspaceId', 
+        _collectionId,
+        {
+          'name': _name,
+          'method': _method,
+          'url': _url,
+          'headers': _headers,
+          'body': _body,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Save request failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> fetchRecentRequests() async {
+    // TODO: Implement fetching recent requests
+  }
+
+  // Set request data from existing request
+  void setRequestData(Map<String, dynamic>? request) {
+    if (request == null) return;
+    _method = request['method'] ?? 'GET';
+    _url = request['url'] ?? request['path'] ?? '';
+    _headers = Map<String, String>.from(request['headers'] ?? {});
+    _body = request['body'] ?? '';
+    _name = request['name'] ?? '';
+    _collectionId = request['collectionId'] ?? '';
+    notifyListeners();
+  }
+
   // Clear all request data
   void clear() {
     _method = 'GET';
     _url = '';
     _headers = {};
     _body = '';
+    _name = '';
+    _collectionId = '';
     notifyListeners();
   }
 

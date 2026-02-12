@@ -3,13 +3,15 @@ import '../services/api_service.dart';
 
 class CollectionProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
-  
+
   List<dynamic> _collections = [];
+  List<dynamic> _requests = [];
   Map<String, dynamic>? _selectedCollection;
   bool _isLoading = false;
   String? _errorMessage;
   
   List<dynamic> get collections => _collections;
+  List<dynamic> get requests => _requests;
   Map<String, dynamic>? get selectedCollection => _selectedCollection;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -34,24 +36,6 @@ class CollectionProvider with ChangeNotifier {
     notifyListeners();
   }
   
-  Future<bool> createCollection(String workspaceId, String name, {String? description}) async {
-    try {
-      _errorMessage = null;
-      final collection = await _apiService.createCollection(
-        workspaceId,
-        name,
-        description: description,
-      );
-      _collections.add(collection);
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
-      notifyListeners();
-      return false;
-    }
-  }
-
   Future<bool> updateCollection(String workspaceId, String collectionId, String name, {String? description}) async {
     try {
       _errorMessage = null;
@@ -100,5 +84,31 @@ class CollectionProvider with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  List<Map<String, dynamic>> getCollectionsByWorkspace(String workspaceId) {
+    return collections.where((c) => c['workspaceId'] == workspaceId).cast<Map<String, dynamic>>().toList();
+  }
+
+  List<Map<String, dynamic>> getRequestsByCollection(String collectionId) {
+    return requests.where((r) => r['collectionId'] == collectionId).cast<Map<String, dynamic>>().toList();
+  }
+
+  Future<void> fetchCollections(String workspaceId) async {
+    await loadCollections(workspaceId);
+  }
+
+  Future<bool> createCollection(String workspaceId, String name, {String? description}) async {
+    try {
+      _errorMessage = null;
+      final collection = await _apiService.createCollection(workspaceId, name, description: description);
+      _collections.add(collection);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
   }
 }
