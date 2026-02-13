@@ -43,12 +43,8 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
   void initState() {
     super.initState();
     _loadRequestData();
-    // Set login JSON body
-    _jsonBodyController.text = '''{
-  "email": "subimv17@gmail.com",
-  "password": "subi@2006"
-}''';
-    _urlController.text = 'http://localhost:8081/api/v1/auth/login';
+    // Set default empty JSON body template
+    _jsonBodyController.text = '{\n  \n}';
   }
 
   void _loadRequestData() {
@@ -1000,7 +996,7 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                     vertical: 5,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _getStatusColor(response['statusCode']).withOpacity(0.1),
+                                    color: _getStatusColor(response['status']).withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Row(
@@ -1009,17 +1005,17 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                         width: 8,
                                         height: 8,
                                         decoration: BoxDecoration(
-                                          color: _getStatusColor(response['statusCode']),
+                                          color: _getStatusColor(response['status']),
                                           shape: BoxShape.circle,
                                         ),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '${response['statusCode']} ${_getStatusText(response['statusCode'])}',
+                                        '${response['status']} ${_getStatusText(response['status'])}',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
-                                          color: _getStatusColor(response['statusCode']),
+                                          color: _getStatusColor(response['status']),
                                         ),
                                       ),
                                     ],
@@ -1036,7 +1032,7 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
-                                    '${response['duration']}ms',
+                                    '${response['duration_ms'] ?? response['duration'] ?? 0}ms',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey.shade700,
@@ -1064,7 +1060,7 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                 border: Border.all(color: Colors.grey.shade200),
                               ),
                               child: SelectableText(
-                                _formatJson(response['body'] ?? '{}'),
+                                _formatResponseBody(response['body']),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontFamily: 'monospace',
@@ -1096,6 +1092,33 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
     } catch (e) {
       return jsonString;
     }
+  }
+
+  // Handle response body that can be either a Map/Object or a String
+  String _formatResponseBody(dynamic body) {
+    if (body == null) return '{}';
+    
+    // If it's already a Map or List (from json.decode), convert it to formatted string
+    if (body is Map || body is List) {
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(body);
+    }
+    
+    // If it's a String, try to parse and format it
+    if (body is String) {
+      if (body.isEmpty) return '{}';
+      try {
+        final decoded = json.decode(body);
+        const encoder = JsonEncoder.withIndent('  ');
+        return encoder.convert(decoded);
+      } catch (e) {
+        // Return as-is if it's not valid JSON
+        return body;
+      }
+    }
+    
+    // Fallback for any other type
+    return body.toString();
   }
 
   Color _getStatusColor(int? statusCode) {
