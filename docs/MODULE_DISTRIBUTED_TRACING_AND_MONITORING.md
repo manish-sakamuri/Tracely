@@ -1,11 +1,4 @@
-# Your Module: Distributed Tracing & Monitoring
 
-**Prepared for:** Vasudev Kishor  
-**Use this to explain your part when mam asks.**
-
----
-
-## 1. What is this module about? (30 seconds)
 
 This module does two things:
 
@@ -53,56 +46,3 @@ This module does two things:
 *(TracingConfigHandler uses TracingConfigService in `services/tracing_config_service.go` – same module, CRUD + toggle + enabled/disabled lists + IsTracingEnabled.)*
 
 ---
-
-## 5. Middlewares (trace context propagation)
-
-| Middleware | File | What it does |
-|------------|------|----------------|
-| **TraceID** | `middlewares/trace.go` | HTTP: read or generate X-Trace-ID, X-Span-ID, X-Parent-Span-ID; set in gin context and response headers. So every request has a trace context. |
-| **ServiceTracingMiddleware** | `middlewares/trace.go` | Uses DB: gets workspace_id and X-Service-Name, loads per-service tracing config. If disabled or path excluded or not sampled → sets tracing_enabled false. Otherwise propagates trace/span/parent-span IDs like TraceID. Helper: IsTracingEnabled(c), GetTracingConfig(c). |
-| **GRPCUnaryInterceptor / GRPCStreamInterceptor** | `middlewares/grpc_interceptor.go` | gRPC: read x-trace-id, x-span-id, x-parent-span-id from metadata (or generate). Put in context and in response metadata. For streams, wrap stream so Context() returns context with trace IDs. |
-| **GraphQLMiddleware** | `middlewares/graphql_wrapper.go` | HTTP for GraphQL: same idea – read or generate trace/span/parent-span, put in request context and response headers. GetTraceIDFromContext(ctx) for resolvers. |
-
-**One-liner for mam:** “We have one middleware for normal HTTP, one that also respects per-service tracing config from the DB, one for gRPC (unary and stream), and one for GraphQL, so trace context is consistent across HTTP, gRPC, and GraphQL.”
-
----
-
-## 6. How the pieces connect
-
-- **Request comes in** → TraceID or ServiceTracingMiddleware sets trace_id, span_id (and optional parent_span_id) in context and headers.
-- **Downstream HTTP/gRPC/GraphQL** calls should send these headers/metadata so the next service continues the same trace and creates child spans.
-- **TraceService** creates Trace and Spans (e.g. when request is executed or when middleware records spans); **WaterfallService** turns a trace’s spans into a tree for the UI.
-- **TracingConfigService** stores per-service settings; **ServiceTracingMiddleware** uses them to decide whether to trace and whether to propagate.
-- **MonitoringService** reads Executions and Spans to build dashboard and topology; uses **PercentileCalculator** for P50/P95/P99 in GetServiceLatencies.
-- **LoadTestService** runs many executions of a request and uses the same idea (percentiles) for load test results.
-- **AlertingService** evaluates rules on execution data and creates alerts; **AlertHandler** exposes create rule, list active alerts, acknowledge.
-
----
-
-## 7. Short “explain like I’m presenting” script
-
-You can say something like:
-
-- “My module is **Distributed Tracing and Monitoring**.”
-- “**Tracing** means we attach a trace ID and span IDs to every request. Our middlewares do this for HTTP, gRPC, and GraphQL. So when a request goes through multiple services, we can see the full path and each step’s duration. We store traces and spans in the DB. The UI can show a **waterfall** view and the **critical path** – the longest chain that contributes most to latency. We also support **per-service config**: enable/disable tracing, sampling rate, and path exclusions.”
-- “**Monitoring** uses this data plus execution records. We have a **dashboard** with request counts, success/failure, average response time, error rate, and a list of services. We have a **topology** view that shows which service calls which, derived from parent-child span relationships. We also expose **per-service latencies** with P50, P95, P99 using a small **percentile calculator**.”
-- “We have **load testing**: you pick a saved request and run it with a given concurrency and total number of requests; it runs in the background and we store success/failure counts and response time percentiles. We also have **alerting**: you define rules like ‘latency above X’ or ‘error rate above Y’ in a time window; when triggered we create an alert and can notify via Slack, email, or PagerDuty – those are stubs for now. There’s also a **failure injection** service used to simulate timeouts or errors for testing.”
-- “So in one sentence: **we make every request traceable across services, visualize it, and monitor health and latency with dashboards, topology, load tests, and alerts.**”
-
----
-
-## 8. If asked “Explain one handler in detail”
-
-**Example: TraceHandler**
-
-- “TraceHandler has two dependencies: TraceService and WaterfallService. GetTraces takes workspace_id from the URL and optional query params like service_name, start_time, end_time, limit, offset. It calls TraceService.GetTraces, which checks workspace access, then queries the traces table with those filters and returns the list and total count. GetTraceDetails takes trace_id, verifies access via GetTraceDetails, and returns the trace and its spans. GetWaterfall also takes trace_id, first verifies access via GetTraceDetails, then asks WaterfallService to build a tree from the trace’s spans – root span, then children by parent_span_id – and returns that tree for the frontend waterfall chart. AddAnnotation and GetCriticalPath are the other two endpoints: one adds a user comment on a span, the other returns the critical path computed by TraceService from the span tree.”
-
----
-
-## 9. If asked “How does trace propagation work?”
-
-- “For HTTP, we have a middleware that looks at headers X-Trace-ID, X-Span-ID, X-Parent-Span-ID. If they’re missing, we generate new IDs. We set these in the request context and in the response headers so the client or next service can send them on. For gRPC we do the same but using gRPC metadata (incoming and outgoing). For GraphQL we use the same header names and put the IDs in the request context. So as long as each service sends these headers in outgoing HTTP calls or metadata in gRPC calls, the whole chain shares one trace ID and each hop has a span ID and a parent span ID, which is how we build the tree and the waterfall.”
-
----
-
-Good luck for your explanation.
