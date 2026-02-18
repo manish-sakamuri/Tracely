@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "Tracely API - Login Debug",
+    "description": "Complete login testing with debugging",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🔐 User Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"subimv17@gmail.com\",\n  \"password\": \"subi@2006\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/auth/login",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8081",
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Check if request was successful\n",
+              "console.log('Status Code:', pm.response.code);\n",
+              "console.log('Response:', pm.response.text());\n",
+              "\n",
+              "pm.test('Status code should be 200', function () {\n",
+              "    pm.response.to.have.status(200);\n",
+              "});\n",
+              "\n",
+              "pm.test('Response should contain access_token', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData).to.have.property('access_token');\n",
+              "    pm.expect(jsonData.access_token).to.not.be.empty;\n",
+              "});\n",
+              "\n",
+              "pm.test('Response should contain user_id', function () {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.expect(jsonData).to.have.property('user_id');\n",
+              "});\n",
+              "\n",
+              "// Save token to environment for later use\n",
+              "try {\n",
+              "    var jsonData = pm.response.json();\n",
+              "    pm.environment.set('AUTH_TOKEN', jsonData.access_token);\n",
+              "    pm.environment.set('USER_ID', jsonData.user_id);\n",
+              "    pm.environment.set('REFRESH_TOKEN', jsonData.refresh_token);\n",
+              "    console.log('✅ Tokens saved to environment');\n",
+              "} catch(e) {\n",
+              "    console.log('❌ Failed to save tokens:', e);\n",
+              "}\n"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "✅ User Registration (Do this first!)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"subimv17@gmail.com\",\n  \"password\": \"subi@2006\",\n  \"name\": \"Subim Vijay\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/auth/register",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8081",
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "🔍 Verify Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8081/api/v1/auth/verify",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8081",
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "verify"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

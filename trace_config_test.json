@@ -1,0 +1,259 @@
+{
+  "info": {
+    "_postman_id": "tracing-temp-import",
+    "name": "Tracing Config TEMP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🔍 Get Config by Service",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/services/auth-service",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "services", "auth-service"]
+        }
+      }
+    },
+    {
+      "name": "📋 List All Configs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs"]
+        }
+      }
+    },
+    {
+      "name": "✏️ Update Config",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"sampling_rate\": 0.25, \"description\": \"Updated via test\"}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs/{{tracing_config_id}}",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs", "{{tracing_config_id}}"]
+        }
+      }
+    },
+    {
+      "name": "🔘 Toggle OFF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"enabled\": false}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs/{{tracing_config_id}}/toggle",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs", "{{tracing_config_id}}", "toggle"]
+        }
+      }
+    },
+    {
+      "name": "📊 Check Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/check?service_name=auth-service",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "check"],
+          "query": [
+            {
+              "key": "service_name",
+              "value": "auth-service"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "🔘 Toggle ON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"enabled\": true}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs/{{tracing_config_id}}/toggle",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs", "{{tracing_config_id}}", "toggle"]
+        }
+      }
+    },
+    {
+      "name": "🆕 Create New Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"service_name\": \"user-service\", \"enabled\": true, \"sampling_rate\": 0.7}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs"]
+        }
+      }
+    },
+    {
+      "name": "✅ Get Enabled Services",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/enabled-services",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "enabled-services"]
+        }
+      }
+    },
+    {
+      "name": "🔄 Bulk Toggle",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"service_names\": [\"auth-service\", \"user-service\"], \"enabled\": false}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs/bulk-toggle",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs", "bulk-toggle"]
+        }
+      }
+    },
+    {
+      "name": "❌ Get Disabled Services",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/disabled-services",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "disabled-services"]
+        }
+      }
+    },
+    {
+      "name": "🗑️ Delete User Config",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs/{{user_config_id}}",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs", "{{user_config_id}}"]
+        }
+      }
+    },
+    {
+      "name": "📋 Final Check",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{AUTH_TOKEN}}"
+          }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/workspaces/{{WORKSPACE_ID}}/tracing/configs",
+          "host": ["{{BASE_URL}}"],
+          "path": ["workspaces", "{{WORKSPACE_ID}}", "tracing", "configs"]
+        }
+      }
+    }
+  ]
+}
