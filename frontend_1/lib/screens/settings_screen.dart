@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/settings_provider.dart';
+import '../providers/workspace_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -8,620 +12,404 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int selectedTab = 0;
-  final List<String> tabs = [
-    'Profile',
-    'Team',
-    'API Keys',
-    'Integrations',
-    'Billing',
-    'Security'
+  int _selectedTab = 0;
+  final List<Map<String, dynamic>> _tabs = [
+    {'icon': Icons.person_outline, 'label': 'Profile'},
+    {'icon': Icons.tune, 'label': 'Preferences'},
+    {'icon': Icons.security, 'label': 'Security'},
+    {'icon': Icons.info_outline, 'label': 'About'},
   ];
+
+  // Controllers for profile editing
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  bool _isEditing = false;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSettings();
+      _populateProfileFields();
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _populateProfileFields() {
+    final auth = context.read<AuthProvider>();
+    _nameController.text = auth.user?['name'] ?? '';
+    _emailController.text = auth.user?['email'] ?? '';
+  }
+
+  Future<void> _loadSettings() async {
+    await context.read<SettingsProvider>().loadSettings();
+  }
+
+  Future<void> _saveSettings(Map<String, dynamic> updates) async {
+    setState(() => _isSaving = true);
+    final success = await context.read<SettingsProvider>().updateSettings(updates);
+    if (mounted) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? '✅ Settings saved' : '❌ Failed to save settings'),
+          backgroundColor: success ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        color: const Color(0xFFFAFAFA),
-        child: Column(
-          children: [
-            _buildTopBar(),
-            Expanded(
-              child: Row(
-                children: [
-                  // Side Navigation
-                  Container(
-                    width: 240,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(right: BorderSide(color: Colors.grey.shade200)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.grey.shade200),
+    return Consumer2<AuthProvider, SettingsProvider>(
+      builder: (context, authProvider, settingsProvider, child) {
+        return Container(
+          color: const Color(0xFFF8F9FA),
+          child: Row(
+            children: [
+              // Settings sidebar
+              Container(
+                width: 220,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(right: BorderSide(color: Colors.grey.shade200)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // User info header
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.grey.shade900,
+                            child: Text(
+                              authProvider.user?['name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
+                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                           ),
-                          child: Text(
-                            'Settings',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.grey.shade900,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  authProvider.user?['name'] ?? 'User',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade900),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  authProvider.user?['email'] ?? '',
+                                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Tab items
+                    ...List.generate(_tabs.length, (index) {
+                      final isActive = _selectedTab == index;
+                      return InkWell(
+                        onTap: () => setState(() => _selectedTab = index),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isActive ? Colors.grey.shade100 : Colors.transparent,
+                            border: Border(
+                              left: BorderSide(
+                                color: isActive ? Colors.grey.shade900 : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _tabs[index]['icon'] as IconData,
+                                size: 16,
+                                color: isActive ? Colors.grey.shade900 : Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _tabs[index]['label'] as String,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                                  color: isActive ? Colors.grey.shade900 : Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        ...List.generate(tabs.length, (index) {
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                selectedTab = index;
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 16),
-                              decoration: BoxDecoration(
-                                color: selectedTab == index
-                                    ? Colors.grey.shade100
-                                    : Colors.transparent,
-                                border: Border(
-                                  left: BorderSide(
-                                    color: selectedTab == index
-                                        ? Colors.grey.shade900
-                                        : Colors.transparent,
-                                    width: 3,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                tabs[index],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: selectedTab == index
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                  color: selectedTab == index
-                                      ? Colors.grey.shade900
-                                      : Colors.grey.shade600,
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-
-                  // Content Area
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(40),
-                      child: _buildTabContent(),
-                    ),
-                  ),
-                ],
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+              // Content area
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: _buildTabContent(authProvider, settingsProvider),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Tracely',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade900,
-            ),
-          ),
-          const SizedBox(width: 60),
-          Text(
-            'Settings',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade900,
-            ),
-          ),
-          const Spacer(),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey.shade900,
-            child: const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabContent() {
-    // FIX: Add safety check for RangeError
-    if (selectedTab >= tabs.length) {
-      setState(() {
-        selectedTab = 0; // Reset to first tab if out of bounds
-      });
-      return const SizedBox();
-    }
-
-    switch (selectedTab) {
+  Widget _buildTabContent(AuthProvider authProvider, SettingsProvider settingsProvider) {
+    switch (_selectedTab) {
       case 0:
-        return _buildProfileSettings();
+        return _buildProfileTab(authProvider);
       case 1:
-        return _buildTeamSettings();
+        return _buildPreferencesTab(settingsProvider);
       case 2:
-        return _buildAPIKeysSettings();
+        return _buildSecurityTab();
       case 3:
-        return _buildIntegrationsSettings();
-      case 4:
-        return _buildBillingSettings();
-      case 5:
-        return _buildSecuritySettings();
+        return _buildAboutTab();
       default:
         return const SizedBox();
     }
   }
 
-  Widget _buildProfileSettings() {
+  // ========== PROFILE TAB ==========
+  Widget _buildProfileTab(AuthProvider authProvider) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Profile Settings',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade900,
-          ),
+        Row(
+          children: [
+            Text('Profile', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+            const Spacer(),
+            if (!_isEditing)
+              _actionButton('Edit Profile', Icons.edit, () => setState(() => _isEditing = true)),
+          ],
         ),
-        const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
+        const SizedBox(height: 24),
+        _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Avatar + Name
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 40,
+                    radius: 32,
                     backgroundColor: Colors.grey.shade900,
-                    child: const Icon(Icons.person, color: Colors.white, size: 32),
-                  ),
-                  const SizedBox(width: 20),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'John Doe',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                      Text(
-                        'john.doe@example.com',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Change Photo'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              _buildTextField('Full Name', 'John Doe'),
-              const SizedBox(height: 16),
-              _buildTextField('Email', 'john.doe@example.com'),
-              const SizedBox(height: 16),
-              _buildTextField('Company', 'Acme Inc.'),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade900,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Save Changes',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    child: Text(
+                      authProvider.user?['name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTeamSettings() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Team Members',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade900,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.person_add, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Invite Member',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              _buildTeamMember('Sarah Chen', 'sarah@example.com', 'Admin'),
-              const SizedBox(height: 16),
-              _buildTeamMember('Mike Johnson', 'mike@example.com', 'Editor'),
-              const SizedBox(height: 16),
-              _buildTeamMember('Emily Brown', 'emily@example.com', 'Viewer'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAPIKeysSettings() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'API Keys',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade900,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.add, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Generate Key',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              _buildAPIKeyItem('Production API Key', 'pk_live_...4g8h',
-                  'Created 30 days ago'),
-              const SizedBox(height: 16),
-              _buildAPIKeyItem('Development API Key', 'pk_test_...2k9m',
-                  'Created 60 days ago'),
-              const SizedBox(height: 16),
-              _buildAPIKeyItem(
-                  'Staging API Key', 'pk_stage_...7n3p', 'Created 90 days ago'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIntegrationsSettings() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Integrations',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 32),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3,
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 20,
-          childAspectRatio: 1.5,
-          children: [
-            _buildIntegrationCard('Slack', 'Connected', true),
-            _buildIntegrationCard('GitHub', 'Connected', true),
-            _buildIntegrationCard('Jira', 'Not Connected', false),
-            _buildIntegrationCard('PagerDuty', 'Connected', true),
-            _buildIntegrationCard('Datadog', 'Not Connected', false),
-            _buildIntegrationCard('New Relic', 'Not Connected', false),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBillingSettings() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Billing & Subscription',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Enterprise Plan',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '\$299/month • Billed annually',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Change Plan'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Divider(color: Colors.grey.shade200),
-              const SizedBox(height: 24),
-              Text(
-                'Payment Method',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.credit_card, color: Colors.grey.shade700),
-                    const SizedBox(width: 16),
-                    Column(
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Visa ending in 4242',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade900,
-                          ),
+                          authProvider.user?['name'] ?? 'User',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade900),
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Expires 12/2025',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
+                          authProvider.user?['email'] ?? '',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                         ),
                       ],
                     ),
-                    const Spacer(),
+                  ),
+                ],
+              ),
+              if (_isEditing) ...[
+                const SizedBox(height: 24),
+                Divider(color: Colors.grey.shade200),
+                const SizedBox(height: 20),
+                _inputField('Full Name', _nameController),
+                const SizedBox(height: 16),
+                _inputField('Email', _emailController),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
                     TextButton(
-                      onPressed: () {},
-                      child: const Text('Update'),
+                      onPressed: () {
+                        _populateProfileFields();
+                        setState(() => _isEditing = false);
+                      },
+                      child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
                     ),
+                    const SizedBox(width: 8),
+                    _primaryButton('Save Changes', _isSaving, () {
+                      _saveSettings({
+                        'name': _nameController.text.trim(),
+                        'email': _emailController.text.trim(),
+                      });
+                      setState(() => _isEditing = false);
+                    }),
                   ],
                 ),
-              ),
+              ],
             ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        // Workspace info
+        _card(
+          child: Consumer<WorkspaceProvider>(
+            builder: (context, workspaceProvider, _) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Workspace', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+                  const SizedBox(height: 12),
+                  _infoRow('Active Workspace', workspaceProvider.selectedWorkspace?['name'] ?? 'None'),
+                  _infoRow('Total Workspaces', '${workspaceProvider.workspaces.length}'),
+                  _infoRow('Workspace ID', workspaceProvider.selectedWorkspaceId ?? 'N/A'),
+                ],
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSecuritySettings() {
+  // ========== PREFERENCES TAB ==========
+  Widget _buildPreferencesTab(SettingsProvider settingsProvider) {
+    final settings = settingsProvider.settings ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Security Settings',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade900,
-          ),
-        ),
-        const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
+        Text('Preferences', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+        const SizedBox(height: 24),
+        _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSecurityOption(
-                'Two-Factor Authentication',
-                'Add an extra layer of security',
-                true,
-              ),
-              const SizedBox(height: 20),
-              _buildSecurityOption(
-                'Session Timeout',
-                'Auto logout after 30 minutes of inactivity',
-                true,
-              ),
-              const SizedBox(height: 20),
-              _buildSecurityOption(
-                'Login Notifications',
-                'Get notified of new login attempts',
-                false,
-              ),
-              const SizedBox(height: 32),
-              Divider(color: Colors.grey.shade200),
-              const SizedBox(height: 24),
-              Text(
-                'Change Password',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
+              Text('General', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
               const SizedBox(height: 16),
-              _buildTextField('Current Password', '', isPassword: true),
+              _toggleRow('Dark Mode', 'Use dark theme across the app', settings['dark_mode'] ?? false, (val) {
+                _saveSettings({...settings, 'dark_mode': val});
+              }),
               const SizedBox(height: 12),
-              _buildTextField('New Password', '', isPassword: true),
+              _toggleRow('Auto-save Requests', 'Automatically save request changes', settings['auto_save'] ?? true, (val) {
+                _saveSettings({...settings, 'auto_save': val});
+              }),
               const SizedBox(height: 12),
-              _buildTextField('Confirm New Password', '', isPassword: true),
+              _toggleRow('Real-time Trace Updates', 'Poll for new traces automatically', settings['realtime_traces'] ?? true, (val) {
+                _saveSettings({...settings, 'realtime_traces': val});
+              }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Request Defaults', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+              const SizedBox(height: 16),
+              _toggleRow('Follow Redirects', 'Automatically follow HTTP redirects', settings['follow_redirects'] ?? true, (val) {
+                _saveSettings({...settings, 'follow_redirects': val});
+              }),
+              const SizedBox(height: 12),
+              _toggleRow('SSL Verification', 'Verify SSL certificates', settings['ssl_verification'] ?? true, (val) {
+                _saveSettings({...settings, 'ssl_verification': val});
+              }),
+              const SizedBox(height: 12),
+              _toggleRow('Send Cookies', 'Include cookies with requests', settings['send_cookies'] ?? false, (val) {
+                _saveSettings({...settings, 'send_cookies': val});
+              }),
+            ],
+          ),
+        ),
+        if (settingsProvider.isLoading)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey.shade600)),
+          ),
+      ],
+    );
+  }
+
+  // ========== SECURITY TAB ==========
+  Widget _buildSecurityTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Security', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+        const SizedBox(height: 24),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Change Password', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+              const SizedBox(height: 16),
+              _inputField('Current Password', _currentPasswordController, isPassword: true),
+              const SizedBox(height: 12),
+              _inputField('New Password', _newPasswordController, isPassword: true),
+              const SizedBox(height: 12),
+              _inputField('Confirm Password', _confirmPasswordController, isPassword: true),
               const SizedBox(height: 20),
-              Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade900,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Update Password',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              _primaryButton('Update Password', _isSaving, () {
+                if (_newPasswordController.text != _confirmPasswordController.text) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+                  );
+                  return;
+                }
+                _saveSettings({
+                  'current_password': _currentPasswordController.text,
+                  'new_password': _newPasswordController.text,
+                });
+                _currentPasswordController.clear();
+                _newPasswordController.clear();
+                _confirmPasswordController.clear();
+              }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Session', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+              const SizedBox(height: 16),
+              _infoRow('Session Status', 'Active'),
+              _infoRow('Token Type', 'JWT'),
+              const SizedBox(height: 12),
+              Consumer<AuthProvider>(
+                builder: (context, auth, _) => Text(
+                  'Logged in as: ${auth.user?['email'] ?? 'Unknown'}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
               ),
             ],
@@ -631,33 +419,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTextField(String label, String value, {bool isPassword = false}) {
+  // ========== ABOUT TAB ==========
+  Widget _buildAboutTab() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
+        Text('About Tracely', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+        const SizedBox(height: 24),
+        _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.bolt, color: Color(0xFFFF6B2C), size: 28),
+                  const SizedBox(width: 10),
+                  Text('Tracely', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _infoRow('Version', '1.0.0'),
+              _infoRow('Backend', 'localhost:8081'),
+              _infoRow('Framework', 'Flutter Web + Go/Gin'),
+              _infoRow('Database', 'PostgreSQL'),
+              _infoRow('Auth', 'JWT + Bcrypt'),
+              const SizedBox(height: 16),
+              Text(
+                'Unified API debugging, distributed tracing, and scenario automation platform.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _pill('Request Studio'), _pill('Distributed Tracing'), _pill('Replay Engine'),
+                  _pill('Mock Service'), _pill('Load Testing'), _pill('Schema Validator'),
+                  _pill('Governance'), _pill('Workflows'), _pill('Secrets Vault'),
+                  _pill('Alerting'), _pill('Monitoring'), _pill('Audit Logs'),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  // ========== REUSABLE WIDGETS ==========
+  Widget _card({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _inputField(String label, TextEditingController controller, {bool isPassword = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+        const SizedBox(height: 6),
         Container(
-          height: 48,
+          height: 40,
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
             border: Border.all(color: Colors.grey.shade200),
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
+            controller: controller,
             obscureText: isPassword,
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: value,
-              hintStyle: TextStyle(color: Colors.grey.shade400),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             ),
           ),
         ),
@@ -665,246 +508,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTeamMember(String name, String email, String role) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Colors.grey.shade900,
-            child: Text(
-              name[0],
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade900,
-                  ),
-                ),
-                Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              role,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          IconButton(
-            icon: const Icon(Icons.more_vert, size: 20),
-            onPressed: () {},
-            color: Colors.grey.shade600,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAPIKeyItem(String name, String key, String created) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade900,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.key, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade900,
-                  ),
-                ),
-                Text(
-                  key,
-                  style: TextStyle(
-                    fontFamily: 'Courier',
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  created,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.copy, size: 18),
-            onPressed: () {},
-            color: Colors.grey.shade600,
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18),
-            onPressed: () {},
-            color: Colors.red.shade400,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIntegrationCard(String name, String status, bool connected) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.apps, color: Colors.grey.shade700, size: 20),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: connected ? Colors.green.shade50 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: connected
-                        ? Colors.green.shade700
-                        : Colors.grey.shade600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {},
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              connected ? 'Configure' : 'Connect',
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSecurityOption(String title, String description, bool enabled) {
+  Widget _toggleRow(String title, String desc, bool value, ValueChanged<bool> onChanged) {
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
+              Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade900)),
+              Text(desc, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
             ],
           ),
         ),
         Switch(
-          value: enabled,
-          onChanged: (value) {},
+          value: value,
+          onChanged: onChanged,
           activeColor: Colors.grey.shade900,
         ),
       ],
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          ),
+          Expanded(
+            child: Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade900)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _primaryButton(String label, bool loading, VoidCallback onPressed) {
+    return InkWell(
+      onTap: loading ? null : onPressed,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: loading ? Colors.grey.shade400 : Colors.grey.shade900,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: loading
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+              : Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton(String label, IconData icon, VoidCallback onPressed) {
+    return InkWell(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: Colors.grey.shade700),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade700)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Colors.grey.shade700)),
     );
   }
 }

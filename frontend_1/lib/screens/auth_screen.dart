@@ -5,7 +5,14 @@ import '../providers/workspace_provider.dart';
 import '../providers/settings_provider.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({Key? key}) : super(key: key);
+  final VoidCallback onAuthSuccess;
+  final VoidCallback onBackToLanding;
+
+  const AuthScreen({
+    Key? key,
+    required this.onAuthSuccess,
+    required this.onBackToLanding,
+  }) : super(key: key);
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -15,7 +22,6 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isLogin = true;
   bool _isLoading = false;
   
-  // Add controllers for the text fields
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
@@ -29,7 +35,6 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _handleSubmit() async {
-    // Validate inputs
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       _showError('Please fill in all fields');
       return;
@@ -47,13 +52,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (isLogin) {
-        // Login
         success = await authProvider.login(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } else {
-        // Register
         success = await authProvider.register(
           _emailController.text.trim(),
           _passwordController.text,
@@ -61,7 +64,6 @@ class _AuthScreenState extends State<AuthScreen> {
         );
 
         if (success) {
-          // Auto login after registration
           success = await authProvider.login(
             _emailController.text.trim(),
             _passwordController.text,
@@ -70,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
 
       if (success && mounted) {
-        // Hydrate app data immediately
+        // Hydrate app data
         final settingsProv = Provider.of<SettingsProvider>(context, listen: false);
         final workspaceProv = Provider.of<WorkspaceProvider>(context, listen: false);
 
@@ -79,13 +81,17 @@ class _AuthScreenState extends State<AuthScreen> {
           workspaceProv.loadWorkspaces(),
         ]);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Authentication successful! Loading your environment...'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Authentication successful! Redirecting to dashboard...'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          // Navigate to home
+          widget.onAuthSuccess();
+        }
       } else if (mounted && authProvider.errorMessage != null) {
         _showError(authProvider.errorMessage!);
       }
@@ -110,282 +116,282 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        return Container(
-          color: Colors.white,
-          child: Row(
-            children: [
-              // Left side - Value proposition
-              Expanded(
-                flex: 5,
-                child: Container(
-                  color: Colors.grey.shade900,
-                  padding: const EdgeInsets.all(80),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tracely',
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      Text(
-                        'The modern way to build, test, and monitor APIs.',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Join thousands of development teams who trust Tracely for their API lifecycle management.',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade400,
-                          height: 1.6,
-                        ),
-                      ),
-                      
-                      // Show logged in status
-                      if (authProvider.isAuthenticated) ...[
-                        const SizedBox(height: 40),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.withOpacity(0.3)),
-                          ),
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: Container(
+            color: Colors.white,
+            child: Row(
+              children: [
+                // Left side - Value proposition
+                Expanded(
+                  flex: 5,
+                  child: Container(
+                    color: Colors.grey.shade900,
+                    padding: const EdgeInsets.all(80),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: widget.onBackToLanding,
                           child: Row(
                             children: [
-                              Icon(Icons.check_circle, color: Colors.green.shade300),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'You are logged in!',
-                                  style: TextStyle(
-                                    color: Colors.green.shade300,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              const Icon(Icons.arrow_back, color: Colors.white70, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Back to Home',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade400,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              // Right side - Auth form
-              Expanded(
-                flex: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (authProvider.isAuthenticated)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 30),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                              ),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    "Session is active",
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      // This button can be wired to your main.dart navigation logic
-                                    },
-                                    child: const Text("Go to Dashboard"),
-                                  ),
-                                ],
-                              ),
-                            ),
+                        const SizedBox(height: 40),
+                        const Text(
+                          'Tracely',
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
                           ),
-
-                        Text(
-                          isLogin ? 'Welcome back' : 'Create account',
+                        ),
+                        const SizedBox(height: 40),
+                        const Text(
+                          'The modern way to build, test, and monitor APIs.',
                           style: TextStyle(
                             fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade900,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            height: 1.3,
                           ),
                         ),
-                      const SizedBox(height: 8),
-                      Text(
-                        isLogin
-                            ? 'Sign in to your account'
-                            : 'Start your API journey',
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.grey.shade600,
+                        const SizedBox(height: 24),
+                        Text(
+                          'Join thousands of development teams who trust Tracely for their API lifecycle management.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade400,
+                            height: 1.6,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 40),
-
-                      // OAuth buttons (disabled for now)
-                      _buildOAuthButton('Continue with Google', Icons.g_mobiledata, enabled: false),
-                      const SizedBox(height: 12),
-                      _buildOAuthButton('Continue with GitHub', Icons.code, enabled: false),
-
-                      const SizedBox(height: 32),
-
-                      // Divider
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'or',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 13,
-                              ),
+                        const SizedBox(height: 48),
+                        // Feature pills
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildPill('Request Studio'),
+                            _buildPill('Distributed Tracing'),
+                            _buildPill('Replay Engine'),
+                            _buildPill('Mock Service'),
+                            _buildPill('Load Testing'),
+                            _buildPill('Schema Validator'),
+                            _buildPill('Workflow Automation'),
+                            _buildPill('Governance'),
+                          ],
+                        ),
+                        
+                        if (authProvider.isAuthenticated) ...[
+                          const SizedBox(height: 40),
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green.withOpacity(0.3)),
                             ),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
-                        ],
-                      ),
-
-                      const SizedBox(height: 32),
-
-                      // Name field (only for register)
-                      if (!isLogin) ...[
-                        _buildTextField(
-                          'Full Name',
-                          Icons.person_outline,
-                          controller: _nameController,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Email field
-                      _buildTextField(
-                        'Email address',
-                        Icons.email_outlined,
-                        controller: _emailController,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Password field
-                      _buildTextField(
-                        'Password',
-                        Icons.lock_outline,
-                        isPassword: true,
-                        controller: _passwordController,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Submit button
-                      InkWell(
-                        onTap: _isLoading ? null : _handleSubmit,
-                        child: Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: _isLoading ? Colors.grey.shade400 : Colors.grey.shade900,
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          child: Center(
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : Text(
-                                    isLogin ? 'Sign in' : 'Create account',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
+                            child: Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.green.shade300),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'You are logged in!',
+                                    style: TextStyle(
+                                      color: Colors.green.shade300,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Toggle link
-                      Center(
-                        child: TextButton(
-                          onPressed: () {
-                            setState(() {
-                              isLogin = !isLogin;
-                            });
-                            authProvider.clearError();
-                          },
-                          child: Text(
-                            isLogin
-                                ? 'Don\'t have an account? Sign up'
-                                : 'Already have an account? Sign in',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontSize: 14,
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ),
+                        ],
                       ],
                     ),
                   ),
                 ),
-              ),
-            ],
+
+                // Right side - Auth form
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (authProvider.isAuthenticated)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 30),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      "Session is active",
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: widget.onAuthSuccess,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.grey.shade900,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text("Go to Dashboard →"),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                          Text(
+                            isLogin ? 'Welcome back' : 'Create account',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade900,
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          isLogin
+                              ? 'Sign in to your account'
+                              : 'Start your API journey',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+
+                        // Name field (only for register)
+                        if (!isLogin) ...[
+                          _buildTextField(
+                            'Full Name',
+                            Icons.person_outline,
+                            controller: _nameController,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Email field
+                        _buildTextField(
+                          'Email address',
+                          Icons.email_outlined,
+                          controller: _emailController,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Password field
+                        _buildTextField(
+                          'Password',
+                          Icons.lock_outline,
+                          isPassword: true,
+                          controller: _passwordController,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Submit button
+                        InkWell(
+                          onTap: _isLoading ? null : _handleSubmit,
+                          child: Container(
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: _isLoading ? Colors.grey.shade400 : Colors.grey.shade900,
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                            child: Center(
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : Text(
+                                      isLogin ? 'Sign in' : 'Create account',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Toggle link
+                        Center(
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                isLogin = !isLogin;
+                              });
+                              authProvider.clearError();
+                            },
+                            child: Text(
+                              isLogin
+                                  ? 'Don\'t have an account? Sign up'
+                                  : 'Already have an account? Sign in',
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildOAuthButton(String text, IconData icon, {bool enabled = true}) {
-    return Opacity(
-      opacity: enabled ? 1.0 : 0.5,
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(25),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: Colors.grey.shade700),
-            const SizedBox(width: 12),
-            Text(
-              text,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ],
+  Widget _buildPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.15)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

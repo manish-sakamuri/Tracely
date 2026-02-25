@@ -563,83 +563,53 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Distributed Traces'),
-        actions: [
-          // Real-time indicator
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            child: Row(
-              children: [
+    return Column(
+      children: [
+        // Inline toolbar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _isPollingEnabled ? Colors.green.shade50 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Container(width: 6, height: 6, decoration: BoxDecoration(color: _isPollingEnabled ? Colors.green : Colors.grey, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text(_isPollingEnabled ? 'Live' : 'Paused', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _isPollingEnabled ? Colors.green.shade700 : Colors.grey)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(icon: Icon(_isPollingEnabled ? Icons.pause : Icons.play_arrow, size: 18), onPressed: _togglePolling, tooltip: _isPollingEnabled ? 'Pause' : 'Resume'),
+              IconButton(icon: const Icon(Icons.speed, size: 18), onPressed: _showThresholdDialog, tooltip: 'Threshold'),
+              const Spacer(),
+              if (_showErrorsOnly || _showSlowRequestsOnly || _searchQuery.isNotEmpty)
                 Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _isPollingEnabled ? Colors.green : Colors.grey,
-                    shape: BoxShape.circle,
-                  ),
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+                  child: Row(children: [
+                    Icon(Icons.filter_list, size: 14, color: Colors.blue.shade700),
+                    const SizedBox(width: 4),
+                    Text('Filtered', style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.w500)),
+                  ]),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  _isPollingEnabled ? 'Live' : 'Paused',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _isPollingEnabled ? Colors.green : Colors.grey,
-                  ),
-                ),
-              ],
-            ),
+              IconButton(icon: const Icon(Icons.filter_list, size: 18), onPressed: _showFilterDialog, tooltip: 'Filter'),
+              IconButton(icon: const Icon(Icons.refresh, size: 18), onPressed: () => _loadTraces(reset: true), tooltip: 'Refresh'),
+            ],
           ),
-          IconButton(
-            icon: Icon(_isPollingEnabled ? Icons.pause : Icons.play_arrow),
-            onPressed: _togglePolling,
-            tooltip: _isPollingEnabled ? 'Pause updates' : 'Resume updates',
-          ),
-          // Threshold settings
-          IconButton(
-            icon: const Icon(Icons.speed),
-            onPressed: _showThresholdDialog,
-            tooltip: 'Slow request threshold',
-          ),
-          // Filter indicator badge
-          if (_showErrorsOnly || _showSlowRequestsOnly || _searchQuery.isNotEmpty)
-            Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: _showFilterDialog,
-                  tooltip: 'Filter',
-                ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.filter_list),
-              onPressed: _showFilterDialog,
-              tooltip: 'Filter',
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadTraces(reset: true),
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: _buildBody(),
+        ),
+        Expanded(child: _buildBody()),
+      ],
     );
   }
 

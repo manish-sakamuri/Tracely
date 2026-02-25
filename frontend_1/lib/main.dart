@@ -1,16 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'screens/landing_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/workspaces_screen.dart';
-import 'screens/request_studio_screen.dart';
-import 'screens/collections_screen.dart';
-import 'screens/governance_screen.dart';
-import 'screens/settings_screen.dart';
-import 'screens/trace_screen.dart';
-import 'screens/replay_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/workspace_provider.dart';
 import 'providers/collection_provider.dart';
@@ -28,7 +20,6 @@ import 'providers/test_data_generator_provider.dart';
 
 
 void main() async { 
-  
   WidgetsFlutterBinding.ensureInitialized();
   
   final apiService = ApiService();
@@ -73,175 +64,105 @@ class TracelyApp extends StatelessWidget {
           surface: Colors.white,
         ),
       ),
-      home: const TracelyMainScreen(),
+      home: const TracelyRouter(),
     );
   }
 }
 
-class TracelyMainScreen extends StatefulWidget {
-  const TracelyMainScreen({Key? key}) : super(key: key);
+/// Auth-aware router: manages the top-level screen based on auth state.
+/// Landing (unauthenticated) → Auth → Home (authenticated)
+class TracelyRouter extends StatefulWidget {
+  const TracelyRouter({Key? key}) : super(key: key);
 
   @override
-  State<TracelyMainScreen> createState() => _TracelyMainScreenState();
+  State<TracelyRouter> createState() => _TracelyRouterState();
 }
 
-class _TracelyMainScreenState extends State<TracelyMainScreen> {
-  int _currentScreen = 0;
+class _TracelyRouterState extends State<TracelyRouter> {
+  // 0 = landing, 1 = auth, 2 = home (dashboard)
+  int _currentView = 0;
 
-  final List<Widget> _screens = [
-    const LandingScreen(),
-    const AuthScreen(),
-    const HomeScreen(),
-    const WorkspaceScreen(),
-    const RequestStudioScreen(),
-    const Placeholder(), // CollectionScreen requires workspace
-    const ReplayScreen(),
-    const TracesScreen(),
-    const GovernanceScreen(),
-    const SettingsScreen(),
-  ];
+  void _goToLanding() => setState(() => _currentView = 0);
+  void _goToAuth() => setState(() => _currentView = 1);
+  void _goToHome() {
+    setState(() => _currentView = 2);
+    // Hydrate data on entering home
+    _hydrateAppData();
+  }
 
-  final List<String> _screenNames = [
-    'LANDING',
-    'AUTH',
-    'HOME',
-    'WORKSPACES',
-    'STUDIO',
-    'COLLECTIONS',
-    'REPLAY',
-    'TRACING',
-    'GOVERNANCE',
-    'SETTINGS',
-  ];
+  void _handleLogout() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.logout();
+    setState(() => _currentView = 0);
+  }
+
+  Future<void> _hydrateAppData() async {
+    final workspaceProv = Provider.of<WorkspaceProvider>(context, listen: false);
+    final settingsProv = Provider.of<SettingsProvider>(context, listen: false);
+    await Future.wait([
+      workspaceProv.loadWorkspaces(),
+      settingsProv.loadSettings(),
+    ]);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Check auth state on startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.isAuthenticated) {
+        _goToHome();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          _screens[_currentScreen],
-
-          // Add this Floating button at bottom right for backend test
-          Positioned(
-              bottom: 80,
-              right: 16,
-              child: FloatingActionButton(
-                backgroundColor: Colors.green,
-                child: const Icon(Icons.cloud_done),
-                tooltip: 'Check Backend',
-                onPressed: () async {
-                // Use the Singleton instance we initialized in main()
-                  final apiService = ApiService();
-
-                  // 1. Check if the service has a valid token stored
-                  if (!apiService.isAuthenticated) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('❌ You need to login first'),
-                        backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  // 2. Automatically get headers with the Bearer token
-                  final headers = await apiService.getRequestHeaders();
-
-                  // 3. Hit the workspaces endpoint as a health check
-                  final response = await http.get(
-                    Uri.parse('${ApiService.baseUrl}/workspaces'),
-                    headers: headers,
-                  );
-
-                  String message;
-                  if (response.statusCode == 200) {
-                    message = '✅ Backend is reachable & Session is active!';
-                  } else if (response.statusCode == 401) {
-                    message = '⚠️ Session expired or invalid. Please re-login.';
-                  } else {
-                    message = '⚠️ Backend error: Status ${response.statusCode}';
-                  }
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(message)),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('❌ Connection failed: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-            )),
-
-          // Development navigation bar
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 60,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        // If auth is still loading, show a splash
+        if (authProvider.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading Tracely...'),
                 ],
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16, right: 8),
-                      child: Text(
-                        'WIREFRAME NAV:',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: PopupMenuButton<int>(
-                        tooltip: 'Open navigation',
-                        icon: Icon(Icons.menu, color: Colors.grey.shade300),
-                        onSelected: (index) {
-                          setState(() {
-                            _currentScreen = index;
-                          });
-                        },
-                        itemBuilder: (context) {
-                          return List.generate(_screenNames.length, (index) {
-                            return PopupMenuItem<int>(
-                              value: index,
-                              child: Text(_screenNames[index]),
-                            );
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                ),
-              ),
             ),
-          ),
-        ],
-      ),
+          );
+        }
+
+        // Auto-redirect if already authenticated but on landing/auth
+        if (authProvider.isAuthenticated && _currentView < 2) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _goToHome();
+          });
+        }
+
+        switch (_currentView) {
+          case 0:
+            return LandingScreen(
+              onGetStarted: _goToAuth,
+              onGoToDashboard: _goToHome,
+            );
+          case 1:
+            return AuthScreen(
+              onAuthSuccess: _goToHome,
+              onBackToLanding: _goToLanding,
+            );
+          case 2:
+          default:
+            return HomeScreen(
+              onLogout: _handleLogout,
+              onNavigateToAuth: _goToAuth,
+            );
+        }
+      },
     );
   }
 }

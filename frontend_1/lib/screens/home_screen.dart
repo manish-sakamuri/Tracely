@@ -6,6 +6,9 @@ import '../providers/workspace_provider.dart';
 import '../providers/trace_provider.dart';
 import '../providers/request_provider.dart';
 import '../providers/collection_provider.dart';
+import '../providers/monitoring_provider.dart';
+import '../providers/governance_provider.dart';
+import '../providers/settings_provider.dart';
 import '../screens/workspaces_screen.dart';
 import '../screens/request_studio_screen.dart';
 import '../screens/trace_screen.dart';
@@ -13,18 +16,34 @@ import '../screens/settings_screen.dart';
 import '../screens/replay_screen.dart';
 import '../screens/workspace_setup_screen.dart';
 import '../screens/collections_screen.dart';
+import '../screens/governance_screen.dart';
+import '../screens/tool_screens.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final VoidCallback onLogout;
+  final VoidCallback onNavigateToAuth;
+
+  const HomeScreen({
+    Key? key,
+    required this.onLogout,
+    required this.onNavigateToAuth,
+  }) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // 0=dashboard, 1=request studio, 2=collections, 3=traces, 4=replay,
+  // 5=workspaces, 6=governance, 7=settings,
+  // 8=mock, 9=load test, 10=schema validator, 11=test data, 12=failure injection,
+  // 13=mutation, 14=workflows, 15=webhooks, 16=secrets, 17=audit, 18=alerts,
+  // 19=environments, 20=monitoring, 21=percentile, 22=tracing config, 23=waterfall
+  int _selectedNav = 0;
   String _selectedTimeRange = 'Today';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  bool _sidebarCollapsed = false;
 
   @override
   void initState() {
@@ -43,157 +62,258 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadDashboardData() async {
     final workspaceProvider = context.read<WorkspaceProvider>();
     final traceProvider = context.read<TraceProvider>();
-    final requestProvider = context.read<RequestProvider>();
+    
+    // Load workspaces if not loaded
+    if (workspaceProvider.workspaces.isEmpty) {
+      await workspaceProvider.loadWorkspaces();
+    }
     
     if (workspaceProvider.selectedWorkspaceId != null) {
       await traceProvider.fetchTraces(workspaceProvider.selectedWorkspaceId!);
-      await requestProvider.fetchRecentRequests();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Consumer3<AuthProvider, WorkspaceProvider, TraceProvider>(
-        builder: (context, authProvider, workspaceProvider, traceProvider, child) {
-          if (!authProvider.isAuthenticated) {
-            return _buildUnauthenticatedView();
-          }
+    return Consumer3<AuthProvider, WorkspaceProvider, TraceProvider>(
+      builder: (context, authProvider, workspaceProvider, traceProvider, child) {
+        if (!authProvider.isAuthenticated) {
+          return _buildUnauthenticatedView();
+        }
 
-          return Column(
+        return Scaffold(
+          backgroundColor: const Color(0xFFF8F9FA),
+          body: Row(
             children: [
-              _buildTopBar(authProvider, workspaceProvider),
+              // Sidebar
+              _buildSidebar(authProvider, workspaceProvider),
+              // Main content
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Welcome Header
-                      _buildWelcomeHeader(authProvider, workspaceProvider),
-                      const SizedBox(height: 32),
-
-                      // Quick Actions Row
-                      _buildQuickActionsSection(),
-                      const SizedBox(height: 40),
-
-                      // Metrics Grid
-                      _buildMetricsSection(),
-                      const SizedBox(height: 40),
-
-                      // Main Tools Grid
-                      _buildToolsGrid(),
-                      const SizedBox(height: 40),
-
-                      // Advanced Tools Section
-                      _buildAdvancedToolsSection(),
-                      const SizedBox(height: 40),
-
-                      // Recent Activity and Traces
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: _buildRecentActivitySection(),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildRecentTracesSection(traceProvider),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-
-                      // Quick Stats Footer
-                      _buildQuickStatsFooter(),
-                    ],
-                  ),
+                child: Column(
+                  children: [
+                    _buildTopBar(authProvider, workspaceProvider),
+                    Expanded(
+                      child: _buildCurrentScreen(workspaceProvider, traceProvider),
+                    ),
+                  ],
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTopBar(AuthProvider authProvider, WorkspaceProvider workspaceProvider) {
-    return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+  Widget _buildSidebar(AuthProvider authProvider, WorkspaceProvider workspaceProvider) {
+    final navItems = [
+      {'icon': Icons.dashboard_outlined, 'activeIcon': Icons.dashboard, 'label': 'Dashboard', 'index': 0},
+      {'icon': Icons.edit_note_outlined, 'activeIcon': Icons.edit_note, 'label': 'Request Studio', 'index': 1},
+      {'icon': Icons.folder_outlined, 'activeIcon': Icons.folder, 'label': 'Collections', 'index': 2},
+      {'icon': Icons.timeline_outlined, 'activeIcon': Icons.timeline, 'label': 'Traces & Waterfall', 'index': 3},
+      {'icon': Icons.replay_outlined, 'activeIcon': Icons.replay, 'label': 'Replay Engine', 'index': 4},
+      {'icon': Icons.workspaces_outlined, 'activeIcon': Icons.workspaces, 'label': 'Workspaces', 'index': 5},
+      {'icon': Icons.policy_outlined, 'activeIcon': Icons.policy, 'label': 'Governance', 'index': 6},
+      {'icon': Icons.settings_outlined, 'activeIcon': Icons.settings, 'label': 'Settings', 'index': 7},
+    ];
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: _sidebarCollapsed ? 70 : 240,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Tracely',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade900,
-              letterSpacing: -0.5,
-            ),
+        color: const Color(0xFF111214),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(2, 0),
           ),
-          const SizedBox(width: 48),
-          
-          // Navigation
-          _buildNavItem('Dashboard', true),
-          _buildNavItem('Workspaces', false, onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const WorkspaceScreen()),
-            );
-          }),
-          _buildNavItem('Traces', false, onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const TracesScreen()),
-            );
-          }),
-          
-          const Spacer(),
-          
-          // Workspace Selector
+        ],
+      ),
+      child: Column(
+        children: [
+          // Logo
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
+            height: 70,
+            padding: EdgeInsets.symmetric(horizontal: _sidebarCollapsed ? 12 : 20),
             child: Row(
               children: [
-                Icon(Icons.workspaces_outlined, size: 16, color: Colors.grey.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  workspaceProvider.selectedWorkspace?['name'] ?? 'Select Workspace',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade900,
+                const Icon(Icons.bolt, color: Color(0xFFFF6B2C), size: 24),
+                if (!_sidebarCollapsed) ...[
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Tracely',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
+                  const Spacer(),
+                ],
+                IconButton(
+                  icon: Icon(
+                    _sidebarCollapsed ? Icons.chevron_right : Icons.chevron_left,
+                    color: Colors.white54,
+                    size: 18,
+                  ),
+                  onPressed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          
-          // User Menu
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey.shade900,
-            child: Text(
-              authProvider.user?['name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+
+          // Workspace indicator
+          if (!_sidebarCollapsed)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade400,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        workspaceProvider.selectedWorkspace?['name'] ?? 'No Workspace',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ),
+
+          const SizedBox(height: 8),
+
+          // Section label
+          if (!_sidebarCollapsed)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'NAVIGATION',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+
+          // Nav items
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              children: [
+                ...navItems.map((item) => _buildSidebarItem(
+                  icon: item['icon'] as IconData,
+                  activeIcon: item['activeIcon'] as IconData,
+                  label: item['label'] as String,
+                  index: item['index'] as int,
+                )),
+                
+                if (!_sidebarCollapsed) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    child: Divider(color: Colors.white10),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Text(
+                      'SERVICES',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  _buildServicePill('Mock Service', Icons.cloud_off, 8),
+                  _buildServicePill('Load Testing', Icons.speed, 9),
+                  _buildServicePill('Schema Validator', Icons.verified, 10),
+                  _buildServicePill('Test Data Gen', Icons.data_array, 11),
+                  _buildServicePill('Failure Injection', Icons.warning_amber, 12),
+                  _buildServicePill('Mutation Testing', Icons.shuffle, 13),
+                  _buildServicePill('Workflow Engine', Icons.account_tree, 14),
+                  _buildServicePill('Webhooks', Icons.webhook, 15),
+                  _buildServicePill('Secrets Vault', Icons.lock, 16),
+                  _buildServicePill('Audit Logs', Icons.history, 17),
+                  _buildServicePill('Alerting', Icons.notifications_active, 18),
+                  _buildServicePill('Environments', Icons.swap_horiz, 19),
+                  _buildServicePill('Monitoring', Icons.monitor_heart, 20),
+                  _buildServicePill('Percentile Calc', Icons.analytics, 21),
+                  _buildServicePill('Tracing Config', Icons.tune, 22),
+                  _buildServicePill('Waterfall View', Icons.waterfall_chart, 23),
+                ],
+              ],
+            ),
+          ),
+
+          // User profile
+          Container(
+            padding: EdgeInsets.all(_sidebarCollapsed ? 8 : 12),
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFFFF6B2C),
+                  child: Text(
+                    authProvider.user?['name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (!_sidebarCollapsed) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          authProvider.user?['name'] ?? 'User',
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          authProvider.user?['email'] ?? '',
+                          style: TextStyle(color: Colors.grey.shade500, fontSize: 10),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white38, size: 16),
+                    tooltip: 'Logout',
+                    onPressed: widget.onLogout,
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -201,229 +321,437 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNavItem(String label, bool isActive, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? Colors.grey.shade900 : Colors.grey.shade600,
+  Widget _buildSidebarItem({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required int index,
+  }) {
+    final isActive = _selectedNav == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _selectedNav = index),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: _sidebarCollapsed ? 12 : 14,
+            vertical: 10,
+          ),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
+                color: isActive ? Colors.white : Colors.white54,
+                size: 18,
               ),
-            ),
-            if (isActive) ...[
-              const SizedBox(height: 20),
-              Container(
-                height: 3,
-                width: 24,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade900,
-                  borderRadius: BorderRadius.circular(2),
+              if (!_sidebarCollapsed) ...[
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isActive ? Colors.white : Colors.white54,
+                    fontSize: 13,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildWelcomeHeader(AuthProvider authProvider, WorkspaceProvider workspaceProvider) {
-    final userName = authProvider.user?['name']?.toString().split(' ')[0] ?? 'User';
-    final workspaceName = workspaceProvider.selectedWorkspace?['name'] ?? 'No Workspace';
-    
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Welcome back, $userName 👋',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade900,
-                letterSpacing: -0.5,
+  Widget _buildServicePill(String label, IconData icon, int navIndex) {
+    final isActive = _selectedNav == navIndex;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() => _selectedNav = navIndex),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: isActive ? const Color(0xFFFF6B2C) : Colors.white30, size: 14),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.white38,
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Here\'s what\'s happening in $workspaceName',
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedTimeRange,
-                      items: ['Today', 'This Week', 'This Month', 'Custom']
-                          .map((range) => DropdownMenuItem(
-                                value: range,
-                                child: Text(
-                                  range,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade900,
-                                  ),
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedTimeRange = value);
-                          _loadDashboardData();
-                        }
-                      },
-                      icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Container(
-              width: 280,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 12),
-                  Icon(Icons.search, size: 16, color: Colors.grey.shade500),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search APIs, traces, collections...',
-                        hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade500,
-                        ),
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (value) => setState(() => _searchQuery = value),
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.close, size: 16, color: Colors.grey.shade500),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'QUICK ACTIONS',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade500,
-            letterSpacing: 0.8,
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            _buildQuickAction(
-              icon: Icons.play_arrow,
-              label: 'New Request',
-              color: Colors.grey.shade900,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const RequestStudioScreen()),
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            _buildQuickAction(
-              icon: Icons.workspaces_outlined,
-              label: 'New Workspace',
-              color: Colors.grey.shade800,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WorkspaceSetupScreen()),
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            _buildQuickAction(
-              icon: Icons.folder_outlined,
-              label: 'New Collection',
-              color: Colors.grey.shade700,
-              onTap: () {
-                // Show create collection dialog
-              },
-            ),
-            const SizedBox(width: 12),
-            _buildQuickAction(
-              icon: Icons.replay,
-              label: 'Replay Trace',
-              color: Colors.grey.shade600,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ReplayScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildQuickAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildTopBar(AuthProvider authProvider, WorkspaceProvider workspaceProvider) {
+    final screenTitles = ['Dashboard', 'Request Studio', 'Collections', 'Traces & Waterfall', 'Replay Engine', 'Workspaces', 'Governance', 'Settings',
+      'Mock Service', 'Load Testing', 'Schema Validator', 'Test Data Generator', 'Failure Injection',
+      'Mutation Testing', 'Workflows', 'Webhooks', 'Secrets Vault', 'Audit Logs', 'Alerts',
+      'Environments', 'Monitoring', 'Percentile Calculator', 'Tracing Config', 'Waterfall View'];
+    
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            _selectedNav < screenTitles.length ? screenTitles[_selectedNav] : 'Dashboard',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          const SizedBox(width: 16),
+          
+          // Workspace selector
+          if (workspaceProvider.workspaces.isNotEmpty)
+            PopupMenuButton<String>(
+              tooltip: 'Switch Workspace',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.workspaces_outlined, size: 14, color: Colors.grey.shade700),
+                    const SizedBox(width: 6),
+                    Text(
+                      workspaceProvider.selectedWorkspace?['name'] ?? 'Select',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade900),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
+                  ],
+                ),
+              ),
+              onSelected: (id) {
+                workspaceProvider.selectWorkspace(id);
+                _loadDashboardData();
+              },
+              itemBuilder: (context) => workspaceProvider.workspaces.map<PopupMenuEntry<String>>((w) {
+                return PopupMenuItem<String>(
+                  value: w['id'].toString(),
+                  child: Text(w['name'] ?? 'Unnamed'),
+                );
+              }).toList(),
+            ),
+          
+          const Spacer(),
+          
+          // Search
+          Container(
+            width: 260,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Icon(Icons.search, size: 16, color: Colors.grey.shade500),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search APIs, traces...',
+                      hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Refresh
+          IconButton(
+            icon: Icon(Icons.refresh, size: 18, color: Colors.grey.shade600),
+            tooltip: 'Refresh Data',
+            onPressed: _loadDashboardData,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentScreen(WorkspaceProvider workspaceProvider, TraceProvider traceProvider) {
+    final wsId = workspaceProvider.selectedWorkspaceId;
+    final workspace = workspaceProvider.selectedWorkspace ?? {'id': wsId ?? '', 'name': 'Default'};
+
+    switch (_selectedNav) {
+      case 0:
+        return _buildDashboard(workspaceProvider, traceProvider);
+      case 1:
+        return const RequestStudioScreen();
+      case 2:
+        return CollectionScreen(workspace: Map<String, dynamic>.from(workspace));
+      case 3:
+        return const TracesScreen();
+      case 4:
+        return const ReplayScreen();
+      case 5:
+        return const WorkspaceScreen();
+      case 6:
+        return const GovernanceScreen();
+      case 7:
+        return const SettingsScreen();
+      case 8:
+        return const MockServiceScreen();
+      case 9:
+        return const LoadTestScreen();
+      case 10:
+        return const SchemaValidatorScreen();
+      case 11:
+        return const TestDataGeneratorScreen();
+      case 12:
+        return const FailureInjectionScreen();
+      case 13:
+        return const MutationTestingScreen();
+      case 14:
+        return const WorkflowsScreen();
+      case 15:
+        return const WebhooksScreen();
+      case 16:
+        return const SecretsVaultScreen();
+      case 17:
+        return const AuditLogsScreen();
+      case 18:
+        return const AlertsScreen();
+      case 19:
+        return const EnvironmentScreen();
+      case 20:
+        return const MonitoringScreen();
+      case 21:
+        return const PercentileCalculatorScreen();
+      case 22:
+        return const TracingConfigScreen();
+      case 23:
+        return const WaterfallScreen();
+      default:
+        return _buildDashboard(workspaceProvider, traceProvider);
+    }
+  }
+
+  Widget _buildDashboard(WorkspaceProvider workspaceProvider, TraceProvider traceProvider) {
+    final authProvider = context.read<AuthProvider>();
+    final userName = authProvider.user?['name']?.toString().split(' ')[0] ?? 'User';
+    final workspaceName = workspaceProvider.selectedWorkspace?['name'] ?? 'No Workspace';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Welcome back, $userName 👋',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Here\'s what\'s happening in $workspaceName',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedTimeRange,
+                        items: ['Today', 'This Week', 'This Month']
+                            .map((r) => DropdownMenuItem(value: r, child: Text(r, style: TextStyle(fontSize: 12, color: Colors.grey.shade900))))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _selectedTimeRange = v);
+                        },
+                        icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          // Quick Actions
+          Text('QUICK ACTIONS', style: _sectionLabelStyle()),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildQuickAction(Icons.play_arrow, 'New Request', () => setState(() => _selectedNav = 1)),
+              const SizedBox(width: 12),
+              _buildQuickAction(Icons.workspaces_outlined, 'New Workspace', () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceSetupScreen()));
+              }),
+              const SizedBox(width: 12),
+              _buildQuickAction(Icons.folder_outlined, 'Collections', () => setState(() => _selectedNav = 2)),
+              const SizedBox(width: 12),
+              _buildQuickAction(Icons.replay, 'Replay Trace', () => setState(() => _selectedNav = 4)),
+              const SizedBox(width: 12),
+              _buildQuickAction(Icons.timeline, 'View Traces', () => setState(() => _selectedNav = 3)),
+              const SizedBox(width: 12),
+              _buildQuickAction(Icons.policy, 'Governance', () => setState(() => _selectedNav = 6)),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Metrics
+          Text('WORKSPACE METRICS', style: _sectionLabelStyle()),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildMetricCard('Total Requests', '${traceProvider.traces.length > 0 ? traceProvider.traces.length * 5 : 0}', Icons.http),
+              const SizedBox(width: 16),
+              _buildMetricCard('Collections', '${workspaceProvider.workspaces.length}', Icons.folder),
+              const SizedBox(width: 16),
+              _buildMetricCard('Traces', '${traceProvider.traces.length}', Icons.timeline),
+              const SizedBox(width: 16),
+              _buildMetricCard('Workspaces', '${workspaceProvider.workspaces.length}', Icons.workspaces),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Core Tools Grid
+          Text('CORE TOOLS', style: _sectionLabelStyle()),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 4,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.3,
+            children: [
+              _buildToolCard('Request Studio', 'Build & test API requests with full control', Icons.edit_note, 'Core', () => setState(() => _selectedNav = 1)),
+              _buildToolCard('Traces & Waterfall', 'Visualize distributed traces with span analysis', Icons.timeline, 'Observability', () => setState(() => _selectedNav = 3)),
+              _buildToolCard('Replay Engine', 'Reproduce bugs by replaying historical traces', Icons.replay_circle_filled, 'Debug', () => setState(() => _selectedNav = 4)),
+              _buildToolCard('Workspaces', 'Manage workspaces, collections & team access', Icons.workspaces, 'Management', () => setState(() => _selectedNav = 5)),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // All Services Grid
+          Text('ALL SERVICES', style: _sectionLabelStyle()),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.4,
+            children: [
+              _buildServiceCard('Trace Service', 'Capture & store spans', Icons.timeline, Colors.blue),
+              _buildServiceCard('Waterfall', 'Visualize span trees', Icons.waterfall_chart, Colors.indigo),
+              _buildServiceCard('Tracing Config', 'Sampling rules', Icons.tune, Colors.purple),
+              _buildServiceCard('Percentile Calc', 'P95/P99 analysis', Icons.analytics, Colors.deepPurple),
+              _buildServiceCard('Replay Engine', 'Reproduce bugs', Icons.replay, Colors.teal),
+              _buildServiceCard('Test Data Gen', 'Realistic mock data', Icons.data_array, Colors.green),
+              _buildServiceCard('Mock Service', 'Simulate APIs', Icons.cloud_off, Colors.orange),
+              _buildServiceCard('Load Testing', 'Stress test APIs', Icons.speed, Colors.red),
+              _buildServiceCard('Failure Injection', 'Chaos engineering', Icons.warning_amber, Colors.deepOrange),
+              _buildServiceCard('Workflow Engine', 'Chain API scenarios', Icons.account_tree, Colors.cyan),
+              _buildServiceCard('Request Service', 'HTTP client wrapper', Icons.http, Colors.blueGrey),
+              _buildServiceCard('Schema Validator', 'Contract validation', Icons.verified, Colors.lightGreen),
+              _buildServiceCard('Mutation Testing', 'Fuzz test variables', Icons.shuffle, Colors.amber),
+              _buildServiceCard('Workspace Svc', 'Multi-tenant isolation', Icons.workspaces, Colors.grey),
+              _buildServiceCard('Auth Service', 'JWT & Bcrypt security', Icons.security, Colors.brown),
+              _buildServiceCard('Secrets Vault', 'Encrypted key mgmt', Icons.lock, Colors.pink),
+              _buildServiceCard('Webhook Service', 'Event notifications', Icons.webhook, Colors.lime),
+              _buildServiceCard('Audit Service', 'Action logging', Icons.history, Colors.blue),
+              _buildServiceCard('Settings Svc', 'User preferences', Icons.settings, Colors.blueGrey),
+              _buildServiceCard('Environment Svc', 'Dev/Staging/Prod', Icons.swap_horiz, Colors.indigo),
+              _buildServiceCard('Governance', 'PII masking & policies', Icons.policy, Colors.deepPurple),
+              _buildServiceCard('Session Svc', 'Debug sessions', Icons.access_time, Colors.teal),
+              _buildServiceCard('Monitoring', 'System health', Icons.monitor_heart, Colors.red),
+              _buildServiceCard('Alerting', 'Threshold alerts', Icons.notifications_active, Colors.orange),
+              _buildServiceCard('Collections', 'Organize API suites', Icons.folder, Colors.cyan),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Recent Traces
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 2, child: _buildRecentActivitySection()),
+              const SizedBox(width: 20),
+              Expanded(child: _buildRecentTracesSection(traceProvider)),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // System status footer
+          _buildSystemStatusFooter(traceProvider),
+        ],
+      ),
+    );
+  }
+
+  TextStyle _sectionLabelStyle() => TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: Colors.grey.shade500,
+    letterSpacing: 0.8,
+  );
+
+  Widget _buildQuickAction(IconData icon, String label, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -432,22 +760,15 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 20, color: color),
+                child: Icon(icon, size: 18, color: Colors.grey.shade700),
               ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
+              const SizedBox(height: 6),
+              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
             ],
           ),
         ),
@@ -455,390 +776,49 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMetricsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'WORKSPACE METRICS',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade500,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            _buildMetricCard(
-              title: 'Total Requests',
-              value: '2,847',
-              change: '+12.3%',
-              icon: Icons.http,
-              isPositive: true,
-            ),
-            const SizedBox(width: 20),
-            _buildMetricCard(
-              title: 'Collections',
-              value: '24',
-              change: '+3',
-              icon: Icons.folder,
-              isPositive: true,
-            ),
-            const SizedBox(width: 20),
-            _buildMetricCard(
-              title: 'Traces',
-              value: '1,234',
-              change: '+8.2%',
-              icon: Icons.timeline,
-              isPositive: true,
-            ),
-            const SizedBox(width: 20),
-            _buildMetricCard(
-              title: 'Error Rate',
-              value: '2.4%',
-              change: '-0.8%',
-              icon: Icons.error_outline,
-              isPositive: false,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetricCard({
-    required String title,
-    required String value,
-    required String change,
-    required IconData icon,
-    required bool isPositive,
-  }) {
+  Widget _buildMetricCard(String title, String value, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 20, color: Colors.grey.shade700),
+              child: Icon(icon, size: 18, color: Colors.grey.shade700),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        value,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isPositive
-                              ? Colors.green.shade50
-                              : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          change,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: isPositive
-                                ? Colors.green.shade700
-                                : Colors.red.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToolsGrid() {
-    final tools = [
-      {
-        'title': 'Request Studio',
-        'description': 'Build and test API requests with full control over headers, body, and authentication',
-        'icon': Icons.edit_note,
-        'color': Colors.grey.shade900,
-        'badge': 'Core',
-        'route': const RequestStudioScreen(),
-      },
-      {
-        'title': 'Traces & Waterfall',
-        'description': 'Visualize distributed traces with waterfall charts and span analysis',
-        'icon': Icons.timeline,
-        'color': Colors.grey.shade800,
-        'badge': 'Observability',
-        'route': const TracesScreen(),
-      },
-      {
-        'title': 'Replay',
-        'description': 'Replay historical traces to debug and reproduce issues',
-        'icon': Icons.replay_circle_filled,
-        'color': Colors.grey.shade700,
-        'badge': 'Debug',
-        'route': const ReplayScreen(),
-      },
-      {
-        'title': 'Workspaces',
-        'description': 'Manage workspaces, collections, and team permissions',
-        'icon': Icons.workspaces,
-        'color': Colors.grey.shade600,
-        'badge': 'Management',
-        'route': const WorkspaceScreen(),
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'CORE TOOLS',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade500,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
-            childAspectRatio: 1.2,
-          ),
-          itemCount: tools.length,
-          itemBuilder: (context, index) {
-            final tool = tools[index];
-            return _buildToolCard(tool);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToolCard(Map<String, dynamic> tool) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => tool['route']),
-        );
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: (tool['color'] as Color).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    tool['icon'] as IconData,
-                    size: 20,
-                    color: tool['color'] as Color,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    tool['badge'] as String,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ),
+                Text(title, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                const SizedBox(height: 2),
+                Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              tool['title'] as String,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              tool['description'] as String,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                height: 1.4,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAdvancedToolsSection() {
-    final advancedTools = [
-      {
-        'title': 'Test Data Generator',
-        'description': 'Generate realistic test data for your APIs with customizable schemas',
-        'icon': Icons.data_array,
-        'route': const Placeholder(),
-        'tags': ['Mock Data', 'Faker'],
-      },
-      {
-        'title': 'Schema Validator',
-        'description': 'Validate API requests and responses against JSON schemas',
-        'icon': Icons.verified,
-        'route': const Placeholder(),
-        'tags': ['JSON Schema', 'Validation'],
-      },
-      {
-        'title': 'Waterfall Services',
-        'description': 'Deep dive into service dependencies and latency breakdowns',
-        'icon': Icons.vertical_distribute,
-        'route': const Placeholder(),
-        'tags': ['Dependencies', 'Latency'],
-      },
-      {
-        'title': 'Settings',
-        'description': 'Configure workspace settings, team permissions, and integrations',
-        'icon': Icons.settings,
-        'route': const SettingsScreen(),
-        'tags': ['Preferences', 'Team'],
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'ADVANCED TOOLS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade500,
-                letterSpacing: 0.8,
-              ),
-            ),
-            TextButton(
-              onPressed: () {},
-              child: Text(
-                'View All →',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 20,
-            childAspectRatio: 1.3,
-          ),
-          itemCount: advancedTools.length,
-          itemBuilder: (context, index) {
-            final tool = advancedTools[index];
-            return _buildAdvancedToolCard(tool);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAdvancedToolCard(Map<String, dynamic> tool) {
+  Widget _buildToolCard(String title, String desc, IconData icon, String badge, VoidCallback onTap) {
     return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => tool['route']),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.grey.shade200),
         ),
         child: Column(
@@ -848,135 +828,73 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    tool['icon'] as IconData,
-                    size: 16,
-                    color: Colors.grey.shade700,
-                  ),
+                  decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, size: 18, color: Colors.grey.shade700),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    tool['title'] as String,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade900,
-                    ),
-                  ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
+                  child: Text(badge, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              tool['description'] as String,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade600,
-                height: 1.4,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 6,
-              children: (tool['tags'] as List<String>).map((tag) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+            Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+            const SizedBox(height: 4),
+            Text(desc, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRecentActivitySection() {
+  Widget _buildServiceCard(String title, String desc, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Activity',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  'View All',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, size: 14, color: color),
           ),
-          const SizedBox(height: 16),
-          _buildActivityItem(
-            'New request created',
-            'GET /api/users/123',
-            '2 minutes ago',
-            Icons.play_arrow,
-          ),
-          _buildActivityItem(
-            'Trace replayed',
-            'Failed payment transaction',
-            '15 minutes ago',
-            Icons.replay,
-          ),
-          _buildActivityItem(
-            'Collection updated',
-            'User Management API',
-            '1 hour ago',
-            Icons.folder,
-          ),
-          _buildActivityItem(
-            'Schema validated',
-            'Order creation endpoint',
-            '3 hours ago',
-            Icons.verified,
-          ),
-          _buildActivityItem(
-            'Waterfall analyzed',
-            'Payment service dependency',
-            '5 hours ago',
-            Icons.vertical_distribute,
-          ),
+          const SizedBox(height: 8),
+          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+          const SizedBox(height: 2),
+          Text(desc, style: TextStyle(fontSize: 9, color: Colors.grey.shade500), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentActivitySection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Recent Activity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+          const SizedBox(height: 14),
+          _buildActivityItem('New request created', 'GET /api/users/123', '2 minutes ago', Icons.play_arrow),
+          _buildActivityItem('Trace replayed', 'Failed payment transaction', '15 minutes ago', Icons.replay),
+          _buildActivityItem('Collection updated', 'User Management API', '1 hour ago', Icons.folder),
+          _buildActivityItem('Schema validated', 'Order creation endpoint', '3 hours ago', Icons.verified),
+          _buildActivityItem('Waterfall analyzed', 'Payment service dependency', '5 hours ago', Icons.waterfall_chart),
         ],
       ),
     );
@@ -984,47 +902,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildActivityItem(String action, String target, String time, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(6),
-            ),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(6)),
             child: Icon(icon, size: 12, color: Colors.grey.shade700),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  action,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade900,
-                  ),
-                ),
-                Text(
-                  target,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
+                Text(action, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade900)),
+                Text(target, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
               ],
             ),
           ),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade500,
-            ),
-          ),
+          Text(time, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
         ],
       ),
     );
@@ -1032,12 +928,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRecentTracesSection(TraceProvider traceProvider) {
     final recentTraces = traceProvider.traces.take(5).toList();
-
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
@@ -1046,163 +941,96 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Recent Traces',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade900,
-                ),
-              ),
+              Text('Recent Traces', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
               IconButton(
-                icon: Icon(Icons.refresh, size: 16, color: Colors.grey.shade600),
+                icon: Icon(Icons.refresh, size: 14, color: Colors.grey.shade600),
                 onPressed: _loadDashboardData,
-                tooltip: 'Refresh',
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           if (recentTraces.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.timeline, size: 32, color: Colors.grey.shade400),
+                    Icon(Icons.timeline, size: 28, color: Colors.grey.shade400),
                     const SizedBox(height: 8),
-                    Text(
-                      'No traces yet',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
+                    Text('No traces yet', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    const SizedBox(height: 4),
+                    Text('Send API requests to see traces', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
                   ],
                 ),
               ),
             )
           else
-            ...recentTraces.map((trace) => _buildTraceItem(trace)),
+            ...recentTraces.map((trace) {
+              final duration = trace['duration'] ?? 0;
+              final isError = trace['status'] == 'error';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedNav = 3),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: isError ? Colors.red.shade50 : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Icon(
+                          isError ? Icons.error_outline : Icons.timeline,
+                          size: 12,
+                          color: isError ? Colors.red.shade700 : Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(trace['service'] ?? trace['service_name'] ?? 'Service', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade900)),
+                            Text('${duration}ms · ${trace['span_count'] ?? 0} spans', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildTraceItem(Map<String, dynamic> trace) {
-    final duration = trace['duration'] ?? 0;
-    final isError = trace['status'] == 'error';
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TracesScreen(),
-            ),
-          );
-        },
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: isError ? Colors.red.shade50 : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(
-                isError ? Icons.error_outline : Icons.timeline,
-                size: 12,
-                color: isError ? Colors.red.shade700 : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trace['service'] ?? 'Unknown Service',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade900,
-                    ),
-                  ),
-                  Text(
-                    '${duration}ms · ${trace['span_count'] ?? 0} spans',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getDurationColor(duration).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '${duration}ms',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: _getDurationColor(duration),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _getDurationColor(int duration) {
-    if (duration < 100) return Colors.green.shade600;
-    if (duration < 500) return Colors.orange.shade600;
-    return Colors.red.shade600;
-  }
-
-  Widget _buildQuickStatsFooter() {
+  Widget _buildSystemStatusFooter(TraceProvider traceProvider) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
-          _buildStatChip('API Calls', '2.8K', Icons.http),
-          const SizedBox(width: 24),
-          _buildStatChip('Avg Latency', '124ms', Icons.speed),
-          const SizedBox(width: 24),
-          _buildStatChip('Success Rate', '97.6%', Icons.check_circle),
-          const SizedBox(width: 24),
-          _buildStatChip('Active Traces', '23', Icons.timeline),
+          _buildStatChip('Traces', '${traceProvider.traces.length}', Icons.timeline),
+          const SizedBox(width: 20),
+          _buildStatChip('Status', 'Healthy', Icons.check_circle),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.grey.shade900,
+              color: Colors.green.shade50,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               children: [
-                Icon(Icons.bolt, size: 14, color: Colors.white),
+                Icon(Icons.circle, size: 8, color: Colors.green.shade600),
                 const SizedBox(width: 6),
-                Text(
-                  'System Healthy',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
+                Text('Backend Connected', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
               ],
             ),
           ),
@@ -1216,22 +1044,9 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Icon(icon, size: 14, color: Colors.grey.shade600),
         const SizedBox(width: 6),
-        Text(
-          '$label:',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
+        Text('$label:', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
         const SizedBox(width: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade900,
-          ),
-        ),
+        Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
       ],
     );
   }
@@ -1243,22 +1058,15 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(Icons.lock_outline, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
-          Text(
-            'Please login to continue',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-          ),
+          Text('Please login to continue', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () {
-              // Navigate to login
-            },
+            onPressed: widget.onNavigateToAuth,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.grey.shade900,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Login'),
           ),

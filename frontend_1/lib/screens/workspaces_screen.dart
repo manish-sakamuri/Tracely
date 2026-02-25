@@ -39,76 +39,69 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: Consumer3<WorkspaceProvider, CollectionProvider, AuthProvider>(
-        builder: (context, workspaceProvider, collectionProvider, authProvider, child) {
-          return Column(
-            children: [
-              _buildTopBar(authProvider, workspaceProvider),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(40),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Workspace',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Manage your API collections and requests',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
+    return Consumer3<WorkspaceProvider, CollectionProvider, AuthProvider>(
+      builder: (context, workspaceProvider, collectionProvider, authProvider, child) {
+        return Container(
+          color: const Color(0xFFFAFAFA),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Workspaces',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey.shade900,
                           ),
-                          _buildNewWorkspaceButton(),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Search bar
-                      _buildSearchBar(),
-                      const SizedBox(height: 24),
-
-                      // Stats
-                      _buildStatsSection(workspaceProvider, collectionProvider),
-                      const SizedBox(height: 32),
-
-                      // Workspaces grid
-                      Text(
-                        'Your Workspaces',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade900,
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildWorkspacesGrid(workspaceProvider),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Manage your API collections and requests',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    _buildNewWorkspaceButton(),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Search bar
+                _buildSearchBar(),
+                const SizedBox(height: 20),
+
+                // Stats
+                _buildStatsSection(workspaceProvider, collectionProvider),
+                const SizedBox(height: 24),
+
+                // Workspaces grid
+                Text(
+                  'Your Workspaces',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                const SizedBox(height: 16),
+                _buildWorkspacesGrid(workspaceProvider),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

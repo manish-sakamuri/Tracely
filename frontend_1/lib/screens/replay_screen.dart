@@ -172,22 +172,46 @@ class _ReplayScreenState extends State<ReplayScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Request Replays'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadReplays,
+    return Column(
+      children: [
+        // Inline toolbar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
           ),
-        ],
-      ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createReplay,
-        icon: const Icon(Icons.add),
-        label: const Text('New Replay'),
-      ),
+          child: Row(
+            children: [
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18),
+                onPressed: _loadReplays,
+                tooltip: 'Refresh',
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: _createReplay,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.add, size: 16, color: Colors.white),
+                      SizedBox(width: 6),
+                      Text('New Replay', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: _buildBody()),
+      ],
     );
   }
 

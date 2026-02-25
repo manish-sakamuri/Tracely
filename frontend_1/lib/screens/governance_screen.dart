@@ -173,69 +173,62 @@ class _GovernanceScreenState extends State<GovernanceScreen> {
 
         return Container(
           color: const Color(0xFFFAFAFA),
-          child: Column(
-            children: [
-              _buildTopBar(authProvider),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(40),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Governance Dashboard',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Enforce standards and compliance across your APIs',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Governance Dashboard',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey.shade900,
                           ),
-                          const Spacer(),
-                          ElevatedButton.icon(
-                            onPressed: _showCreatePolicyDialog,
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text('New Policy'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.grey.shade900,
-                              foregroundColor: Colors.white,
-                            ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Enforce standards and compliance across your APIs',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    ElevatedButton.icon(
+                      onPressed: _showCreatePolicyDialog,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('New Policy'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade900,
+                        foregroundColor: Colors.white,
                       ),
-                      const SizedBox(height: 32),
-
-                      // Compliance Scorecards
-                      _buildComplianceCards(governanceProvider),
-
-                      const SizedBox(height: 24),
-
-                      // Active Policies
-                      _buildPoliciesSection(governanceProvider, workspaceProvider),
-
-                      const SizedBox(height: 24),
-
-                      // Security Checks (static for now)
-                      _buildSecurityChecksSection(),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+
+                // Compliance Scorecards
+                _buildComplianceCards(governanceProvider),
+
+                const SizedBox(height: 24),
+
+                // Active Policies
+                _buildPoliciesSection(governanceProvider, workspaceProvider),
+
+                const SizedBox(height: 24),
+
+                // Security Checks
+                _buildSecurityChecksSection(),
+              ],
+            ),
           ),
         );
       },
