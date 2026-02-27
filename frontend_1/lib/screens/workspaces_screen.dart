@@ -265,10 +265,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     int totalRequests = 0;
 
     for (var workspace in workspaces) {
-      final collections = collectionProvider.getCollectionsByWorkspace(workspace['id']);
+      final collections = collectionProvider.getCollectionsByWorkspace(workspace['id']?.toString() ?? '');
       totalCollections += collections.length;
       for (var collection in collections) {
-        totalRequests += collectionProvider.getRequestsByCollection(collection['id']).length;
+        totalRequests += collectionProvider.getRequestsByCollection(collection['id']?.toString() ?? '').length;
       }
     }
 
@@ -481,11 +481,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             Consumer<CollectionProvider>(
               builder: (context, collectionProvider, child) {
                 final collections = collectionProvider
-                    .getCollectionsByWorkspace(workspace['id']);
+                    .getCollectionsByWorkspace(workspace['id']?.toString() ?? '');
                 final requestCount = collections.fold<int>(
                   0,
                   (sum, collection) => sum + collectionProvider
-                      .getRequestsByCollection(collection['id']).length,
+                      .getRequestsByCollection(collection['id']?.toString() ?? '').length,
                 );
                 
                 return Row(

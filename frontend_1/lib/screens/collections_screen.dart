@@ -1,10 +1,13 @@
 // lib/screens/collections_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/collection_provider.dart';
 import '../providers/request_provider.dart';
-import '../screens/request_studio_screen.dart';
 import '../providers/workspace_provider.dart';
+import '../screens/request_studio_screen.dart';
+import '../widgets/animations.dart';
 
 class CollectionScreen extends StatefulWidget {
   final Map<String, dynamic> workspace;
@@ -34,7 +37,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 
   Future<void> _loadCollections() async {
-    await context.read<CollectionProvider>().fetchCollections(widget.workspace['id']);
+    await context.read<CollectionProvider>().loadCollections(widget.workspace['id']?.toString() ?? '');
   }
 
   void _onSearchChanged(String value) {
@@ -101,19 +104,19 @@ class _CollectionScreenState extends State<CollectionScreen> {
               }
 
               final collectionProvider = context.read<CollectionProvider>();
-              final success = await collectionProvider.createCollection(
-                widget.workspace['id'],
+              await collectionProvider.createCollection(
+                widget.workspace['id']?.toString() ?? '',
                 _collectionNameController.text.trim(),
                 description: _collectionDescController.text.trim(),
               );
 
-              if (success && mounted) {
+              if (mounted) {
                 _collectionNameController.clear();
                 _collectionDescController.clear();
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Collection "${_collectionNameController.text}" created'),
+                  const SnackBar(
+                    content: Text('Collection created successfully'),
                     backgroundColor: Colors.green,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -156,6 +159,129 @@ class _CollectionScreenState extends State<CollectionScreen> {
       // Refresh requests when returning
       setState(() {});
     });
+  }
+
+  Future<void> _importCollection() async {
+    final importController = TextEditingController();
+    
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.file_upload_outlined, color: Colors.grey.shade800),
+            const SizedBox(width: 8),
+            const Text('Import Collection'),
+          ],
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Paste Postman Collection JSON below:',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TextField(
+                  controller: importController,
+                  maxLines: null,
+                  decoration: const InputDecoration(
+                    hintText: '{\n  "info": {\n    "name": "My Collection"\n  },\n  "item": [...]\n}',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final jsonText = importController.text.trim();
+              if (jsonText.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please paste JSON content'),
+                    backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              Navigator.pop(context);
+              final provider = context.read<CollectionProvider>();
+              final success = await provider.importFromJson(
+                widget.workspace['id']?.toString() ?? '',
+                jsonText,
+              );
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'Collection imported successfully!' : 'Import failed: ${provider.errorMessage}'),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.file_upload, size: 16),
+            label: const Text('Import'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.shade900,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportCollection() async {
+    if (_selectedCollectionId == null) return;
+
+    final provider = context.read<CollectionProvider>();
+    final jsonString = await provider.exportToJson(
+      widget.workspace['id']?.toString() ?? '',
+      _selectedCollectionId!.toString(),
+    );
+
+    if (jsonString != null && mounted) {
+      await Clipboard.setData(ClipboardData(text: jsonString));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Collection JSON copied to clipboard!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: ${provider.errorMessage}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -264,6 +390,46 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   ),
                 ),
 
+                const SizedBox(height: 8),
+
+                // Import / Export buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _importCollection,
+                          icon: const Icon(Icons.file_upload_outlined, size: 14),
+                          label: const Text('Import', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _selectedCollectionId != null ? _exportCollection : null,
+                          icon: const Icon(Icons.file_download_outlined, size: 14),
+                          label: const Text('Export', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const SizedBox(height: 16),
 
                 // Collections list
@@ -271,7 +437,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   child: Consumer<CollectionProvider>(
                     builder: (context, collectionProvider, child) {
                       final collections = collectionProvider
-                          .getCollectionsByWorkspace(widget.workspace['id'])
+                          .collections
                           .where((collection) {
                         final name = collection['name']?.toString().toLowerCase() ?? '';
                         return _searchQuery.isEmpty || name.contains(_searchQuery);
@@ -317,8 +483,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         itemBuilder: (context, index) {
                           final collection = collections[index];
                           final isSelected = _selectedCollectionId == collection['id'];
-                          final requestCount = collectionProvider
-                              .getRequestsByCollection(collection['id']).length;
+                          final requestCount = 0;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
@@ -447,11 +612,15 @@ class _CollectionScreenState extends State<CollectionScreen> {
   Widget _buildRequestsView() {
     return Consumer<CollectionProvider>(
       builder: (context, collectionProvider, child) {
-        final requests = collectionProvider
-            .getRequestsByCollection(_selectedCollectionId!);
+        final requests = collectionProvider.requests;
         
-        final collection = collectionProvider.collections
-            .firstWhere((c) => c['id'] == _selectedCollectionId);
+        final collections = collectionProvider.collections;
+        Map<String, dynamic>? collection;
+        try {
+          collection = collections.firstWhere((c) => c['id']?.toString() == _selectedCollectionId?.toString());
+        } catch (e) {
+          collection = {'name': 'Collection', 'description': ''};
+        }
 
         return Column(
           children: [
@@ -485,7 +654,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          collection['name'] ?? 'Collection',
+                          collection?['name'] ?? 'Collection',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -493,7 +662,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          collection['description'] ?? 'No description',
+                          collection?['description'] ?? 'No description',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade600,

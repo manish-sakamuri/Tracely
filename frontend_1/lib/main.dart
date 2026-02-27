@@ -81,9 +81,13 @@ class TracelyRouter extends StatefulWidget {
 class _TracelyRouterState extends State<TracelyRouter> {
   // 0 = landing, 1 = auth, 2 = home (dashboard)
   int _currentView = 0;
+  String? _prefillEmail;
 
   void _goToLanding() => setState(() => _currentView = 0);
-  void _goToAuth() => setState(() => _currentView = 1);
+  void _goToAuth([String? email]) => setState(() {
+    _prefillEmail = email;
+    _currentView = 1;
+  });
   void _goToHome() {
     setState(() => _currentView = 2);
     // Hydrate data on entering home
@@ -123,14 +127,22 @@ class _TracelyRouterState extends State<TracelyRouter> {
       builder: (context, authProvider, child) {
         // If auth is still loading, show a splash
         if (authProvider.isLoading) {
-          return const Scaffold(
+          return Scaffold(
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading Tracely...'),
+                  const CircularProgressIndicator(
+                    color: Color(0xFFFF6B2C),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading Tracely...',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 16,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -154,6 +166,7 @@ class _TracelyRouterState extends State<TracelyRouter> {
             return AuthScreen(
               onAuthSuccess: _goToHome,
               onBackToLanding: _goToLanding,
+              initialEmail: _prefillEmail,
             );
           case 2:
           default:

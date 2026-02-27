@@ -1,4 +1,5 @@
 // lib/screens/home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -9,6 +10,8 @@ import '../providers/collection_provider.dart';
 import '../providers/monitoring_provider.dart';
 import '../providers/governance_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../widgets/animations.dart';
 import '../screens/workspaces_screen.dart';
 import '../screens/request_studio_screen.dart';
 import '../screens/trace_screen.dart';
@@ -44,24 +47,35 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _sidebarCollapsed = false;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboardData();
+      _startAutoRefresh();
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _autoRefreshTimer?.cancel();
     super.dispose();
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _loadDashboardData();
+    });
   }
 
   Future<void> _loadDashboardData() async {
     final workspaceProvider = context.read<WorkspaceProvider>();
     final traceProvider = context.read<TraceProvider>();
+    final dashboardProvider = context.read<DashboardProvider>();
     
     // Load workspaces if not loaded
     if (workspaceProvider.workspaces.isEmpty) {
@@ -69,7 +83,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     if (workspaceProvider.selectedWorkspaceId != null) {
-      await traceProvider.fetchTraces(workspaceProvider.selectedWorkspaceId!);
+      final wsId = workspaceProvider.selectedWorkspaceId!;
+      await Future.wait([
+        traceProvider.fetchTraces(wsId),
+        dashboardProvider.fullRefresh(wsId),
+      ]);
     }
   }
 
@@ -563,6 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDashboard(WorkspaceProvider workspaceProvider, TraceProvider traceProvider) {
     final authProvider = context.read<AuthProvider>();
+    final dashboardProvider = context.watch<DashboardProvider>();
     final userName = authProvider.user?['name']?.toString().split(' ')[0] ?? 'User';
     final workspaceName = workspaceProvider.selectedWorkspace?['name'] ?? 'No Workspace';
 
@@ -572,93 +591,126 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Welcome Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome back, $userName 👋',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey.shade900,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Here\'s what\'s happening in $workspaceName',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
+          FadeSlideIn(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
-                    const SizedBox(width: 8),
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedTimeRange,
-                        items: ['Today', 'This Week', 'This Month']
-                            .map((r) => DropdownMenuItem(value: r, child: Text(r, style: TextStyle(fontSize: 12, color: Colors.grey.shade900))))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) setState(() => _selectedTimeRange = v);
-                        },
-                        icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
+                    Text(
+                      'Welcome back, $userName 👋',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade900,
+                        letterSpacing: -0.5,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          'Here\'s what\'s happening in $workspaceName',
+                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                        ),
+                        if (dashboardProvider.lastRefreshed != null) ...[
+                          const SizedBox(width: 12),
+                          Icon(Icons.access_time, size: 12, color: Colors.grey.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Updated ${_formatLastRefreshed(dashboardProvider.lastRefreshed!)}',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
+                      const SizedBox(width: 8),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedTimeRange,
+                          items: ['Today', 'This Week', 'This Month']
+                              .map((r) => DropdownMenuItem(value: r, child: Text(r, style: TextStyle(fontSize: 12, color: Colors.grey.shade900))))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) setState(() => _selectedTimeRange = v);
+                          },
+                          icon: Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey.shade700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 28),
 
           // Quick Actions
-          Text('QUICK ACTIONS', style: _sectionLabelStyle()),
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 50),
+            child: Text('QUICK ACTIONS', style: _sectionLabelStyle()),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildQuickAction(Icons.play_arrow, 'New Request', () => setState(() => _selectedNav = 1)),
+              _buildQuickAction(Icons.play_arrow, 'New Request', () => setState(() => _selectedNav = 1), 0),
               const SizedBox(width: 12),
               _buildQuickAction(Icons.workspaces_outlined, 'New Workspace', () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceSetupScreen()));
-              }),
+              }, 1),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.folder_outlined, 'Collections', () => setState(() => _selectedNav = 2)),
+              _buildQuickAction(Icons.folder_outlined, 'Collections', () => setState(() => _selectedNav = 2), 2),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.replay, 'Replay Trace', () => setState(() => _selectedNav = 4)),
+              _buildQuickAction(Icons.replay, 'Replay Trace', () => setState(() => _selectedNav = 4), 3),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.timeline, 'View Traces', () => setState(() => _selectedNav = 3)),
+              _buildQuickAction(Icons.timeline, 'View Traces', () => setState(() => _selectedNav = 3), 4),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.policy, 'Governance', () => setState(() => _selectedNav = 6)),
+              _buildQuickAction(Icons.policy, 'Governance', () => setState(() => _selectedNav = 6), 5),
             ],
           ),
           const SizedBox(height: 32),
 
           // Metrics
-          Text('WORKSPACE METRICS', style: _sectionLabelStyle()),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildMetricCard('Total Requests', '${traceProvider.traces.length > 0 ? traceProvider.traces.length * 5 : 0}', Icons.http),
-              const SizedBox(width: 16),
-              _buildMetricCard('Collections', '${workspaceProvider.workspaces.length}', Icons.folder),
-              const SizedBox(width: 16),
-              _buildMetricCard('Traces', '${traceProvider.traces.length}', Icons.timeline),
-              const SizedBox(width: 16),
-              _buildMetricCard('Workspaces', '${workspaceProvider.workspaces.length}', Icons.workspaces),
-            ],
+          FadeSlideIn(
+            delay: const Duration(milliseconds: 150),
+            child: Text('WORKSPACE METRICS', style: _sectionLabelStyle()),
           ),
+          const SizedBox(height: 12),
+          dashboardProvider.isLoading
+              ? Row(
+                  children: [
+                    Expanded(child: ShimmerCard(height: 90)),
+                    const SizedBox(width: 16),
+                    Expanded(child: ShimmerCard(height: 90)),
+                    const SizedBox(width: 16),
+                    Expanded(child: ShimmerCard(height: 90)),
+                    const SizedBox(width: 16),
+                    Expanded(child: ShimmerCard(height: 90)),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _buildAnimatedMetricCard('Total Requests', traceProvider.traces.length > 0 ? traceProvider.traces.length * 5 : 0, Icons.http, 0),
+                    const SizedBox(width: 16),
+                    _buildAnimatedMetricCard('Collections', workspaceProvider.workspaces.length, Icons.folder, 1),
+                    const SizedBox(width: 16),
+                    _buildAnimatedMetricCard('Traces', traceProvider.traces.length, Icons.timeline, 2),
+                    const SizedBox(width: 16),
+                    _buildAnimatedMetricCard('Workspaces', workspaceProvider.workspaces.length, Icons.workspaces, 3),
+                  ],
+                ),
           const SizedBox(height: 32),
 
           // Core Tools Grid
@@ -745,74 +797,101 @@ class _HomeScreenState extends State<HomeScreen> {
     letterSpacing: 0.8,
   );
 
-  Widget _buildQuickAction(IconData icon, String label, VoidCallback onTap) {
+  String _formatLastRefreshed(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 10) return 'just now';
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
+  }
+
+  Widget _buildQuickAction(IconData icon, String label, VoidCallback onTap, int index) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
+      child: FadeSlideIn(
+        delay: Duration(milliseconds: 80 + index * 50),
+        child: HoverScaleCard(
+          onTap: onTap,
+          hoverScale: 1.04,
+          hoverElevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 18, color: Colors.grey.shade700),
                 ),
-                child: Icon(icon, size: 18, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 6),
-              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
-            ],
+                const SizedBox(height: 6),
+                Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMetricCard(String title, String value, IconData icon) {
+  Widget _buildAnimatedMetricCard(String title, int value, IconData icon, int index) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: FadeSlideIn(
+        delay: Duration(milliseconds: 200 + index * 60),
+        child: HoverScaleCard(
+          hoverScale: 1.03,
+          hoverElevation: 6,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 18, color: Colors.grey.shade700),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(title, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                const SizedBox(height: 2),
-                Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade900)),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, size: 18, color: Colors.grey.shade700),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                    const SizedBox(height: 2),
+                    AnimatedCounter(
+                      value: value,
+                      duration: const Duration(milliseconds: 1200),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey.shade900),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildToolCard(String title, String desc, IconData icon, String badge, VoidCallback onTap) {
-    return InkWell(
+    return HoverScaleCard(
       onTap: onTap,
+      hoverScale: 1.03,
+      hoverElevation: 8,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -878,24 +957,49 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentActivitySection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Recent Activity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
-          const SizedBox(height: 14),
-          _buildActivityItem('New request created', 'GET /api/users/123', '2 minutes ago', Icons.play_arrow),
-          _buildActivityItem('Trace replayed', 'Failed payment transaction', '15 minutes ago', Icons.replay),
-          _buildActivityItem('Collection updated', 'User Management API', '1 hour ago', Icons.folder),
-          _buildActivityItem('Schema validated', 'Order creation endpoint', '3 hours ago', Icons.verified),
-          _buildActivityItem('Waterfall analyzed', 'Payment service dependency', '5 hours ago', Icons.waterfall_chart),
-        ],
+    final dashboardProvider = context.watch<DashboardProvider>();
+    final activities = dashboardProvider.recentActivity;
+
+    return FadeSlideIn(
+      delay: const Duration(milliseconds: 400),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recent Activity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+            const SizedBox(height: 14),
+            if (activities.isEmpty) ...[
+              _buildActivityItem('New request created', 'GET /api/users/123', '2 minutes ago', Icons.play_arrow),
+              _buildActivityItem('Trace replayed', 'Failed payment transaction', '15 minutes ago', Icons.replay),
+              _buildActivityItem('Collection updated', 'User Management API', '1 hour ago', Icons.folder),
+              _buildActivityItem('Schema validated', 'Order creation endpoint', '3 hours ago', Icons.verified),
+              _buildActivityItem('Waterfall analyzed', 'Payment service dependency', '5 hours ago', Icons.waterfall_chart),
+            ] else
+              ...activities.map((a) {
+                final iconMap = <String, IconData>{
+                  'play_arrow': Icons.play_arrow,
+                  'timeline': Icons.timeline,
+                  'folder': Icons.folder,
+                  'workspaces': Icons.workspaces,
+                  'verified': Icons.verified,
+                  'replay': Icons.replay,
+                  'history': Icons.history,
+                };
+                return _buildActivityItem(
+                  a['action'] ?? '',
+                  a['target'] ?? '',
+                  a['time'] ?? '',
+                  iconMap[a['icon']] ?? Icons.history,
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

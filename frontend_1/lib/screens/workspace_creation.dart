@@ -364,14 +364,36 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                 hintText: 'Choose how this workspace will be used',
                 child: Column(
                   children: [
-                    // Internal Option
+                    // Personal Option
                     _buildTypeOption(
-                      title: 'Internal Team',
+                      title: 'Personal',
+                      description: 'For individual use — your private API workspace',
+                      icon: Icons.person_outlined,
+                      isSelected: _selectedType == WorkspaceType.personal,
+                      color: const Color(0xFF06B6D4),
+                      onTap: () => setState(() => _selectedType = WorkspaceType.personal),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Internal Team Option
+                    _buildTypeOption(
+                      title: 'Team',
                       description: 'Build and test APIs within your organization',
                       icon: Icons.groups_outlined,
                       isSelected: _selectedType == WorkspaceType.internal,
                       color: _primaryColor,
                       onTap: () => setState(() => _selectedType = WorkspaceType.internal),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Enterprise Option
+                    _buildTypeOption(
+                      title: 'Enterprise',
+                      description: 'Organization-wide workspace with advanced controls',
+                      icon: Icons.business_outlined,
+                      isSelected: _selectedType == WorkspaceType.enterprise,
+                      color: _accentColor,
+                      onTap: () => setState(() => _selectedType = WorkspaceType.enterprise),
                     ),
                     const SizedBox(height: 16),
 
@@ -602,7 +624,13 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                 // Type
                 _buildSummaryItem(
                   label: 'Type',
-                  value: _selectedType == WorkspaceType.internal ? 'Internal Team' : 'Partner Collaboration',
+                  value: _selectedType == WorkspaceType.personal
+                      ? 'Personal'
+                      : _selectedType == WorkspaceType.internal
+                          ? 'Team (Internal)'
+                          : _selectedType == WorkspaceType.enterprise
+                              ? 'Enterprise'
+                              : 'Partner Collaboration',
                   icon: Icons.category_outlined,
                   color: _secondaryColor,
                 ),

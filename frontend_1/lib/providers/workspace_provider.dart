@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
-// Add these enums at the top of the file
-enum WorkspaceType { internal, partner }
-enum AccessType { teamOnly, inviteOnly }
+// Workspace type enum with 3 types: personal, internal (team), partner, enterprise
+enum WorkspaceType { personal, internal, partner, enterprise }
+enum AccessType { teamOnly, inviteOnly, open }
 
 class WorkspaceProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -56,6 +56,32 @@ class WorkspaceProvider with ChangeNotifier {
     notifyListeners();
   }
   
+  /// Map WorkspaceType enum to API string
+  static String typeToString(WorkspaceType type) {
+    switch (type) {
+      case WorkspaceType.personal:
+        return 'personal';
+      case WorkspaceType.internal:
+        return 'internal';
+      case WorkspaceType.partner:
+        return 'partner';
+      case WorkspaceType.enterprise:
+        return 'enterprise';
+    }
+  }
+
+  /// Map AccessType enum to API string
+  static String accessToString(AccessType access) {
+    switch (access) {
+      case AccessType.teamOnly:
+        return 'team';
+      case AccessType.inviteOnly:
+        return 'invite';
+      case AccessType.open:
+        return 'open';
+    }
+  }
+
   // Enhanced createWorkspace method for multi-step form
   Future<bool> createWorkspace({
     required String name,
@@ -69,11 +95,9 @@ class WorkspaceProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
       
-      // Convert enums to string values
-      final typeString = type == WorkspaceType.internal ? 'internal' : 'partner';
-      final accessString = accessType == AccessType.teamOnly ? 'team' : 'invite';
+      final typeString = typeToString(type);
+      final accessString = accessToString(accessType);
       
-      // Call the updated API method
       final workspace = await _apiService.createWorkspace(
         name,
         description: description,
@@ -82,10 +106,7 @@ class WorkspaceProvider with ChangeNotifier {
         accessType: accessString,
       );
       
-      // Add to workspaces list
       _workspaces.add(workspace);
-      
-      // Auto-select the newly created workspace
       _selectedWorkspaceId = workspace['id'].toString();
       
       _isLoading = false;
@@ -118,7 +139,6 @@ class WorkspaceProvider with ChangeNotifier {
 
       await _apiService.updateWorkspace(workspaceId, data['name'], description: data['description']);
 
-      // Update local workspace
       final index = _workspaces.indexWhere((w) => w['id'] == workspaceId);
       if (index != -1) {
         _workspaces[index] = {
@@ -146,10 +166,8 @@ class WorkspaceProvider with ChangeNotifier {
       
       await _apiService.deleteWorkspace(workspaceId);
       
-      // Remove from local list
       _workspaces.removeWhere((w) => w['id'].toString() == workspaceId.toString());
       
-      // If deleted workspace was selected, select first available or null
       if (_selectedWorkspaceId == workspaceId) {
         _selectedWorkspaceId = _workspaces.isNotEmpty ? _workspaces[0]['id'].toString() : null;
       }
@@ -181,14 +199,12 @@ class WorkspaceProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      // Use the new initializeWorkspace API method
       final workspace = await _apiService.initializeWorkspace(
         name,
         description: description,
         templateId: templateId,
       );
 
-      // Add to workspaces list and set as selected
       _workspaces.add(workspace);
       _selectedWorkspaceId = workspace['id'].toString();
 

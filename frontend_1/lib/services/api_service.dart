@@ -1014,50 +1014,105 @@ class ApiService {
     return data['replays'] ?? data['data'] ?? [];
   }
 
+  // ==================== COLLECTION REQUESTS ENDPOINTS ====================
+
+  Future<List<dynamic>> getCollectionRequests(String workspaceId, String collectionId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId/requests'),
+      headers: await _getHeaders(),
+    );
+    final data = await _handleResponse(response);
+    return data['requests'] ?? data['data'] ?? [];
+  }
+
+  Future<Map<String, dynamic>> importCollection(String workspaceId, Map<String, dynamic> jsonData) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/workspaces/$workspaceId/collections/import'),
+      headers: await _getHeaders(),
+      body: json.encode(jsonData),
+    );
+    return await _handleResponse(response);
+  }
+
+  // ==================== DIRECT REQUEST ====================
+
   Future<Map<String, dynamic>> sendDirectRequest({
-  required String method,
-  required String url,
-  Map<String, dynamic>? body,
-  Map<String, String>? headers,
-  Map<String, dynamic>? queryParams,
-}) async {
-  // 1. Setup URL & Query Params
-  Uri uri = Uri.parse(url);
-  if (queryParams != null) {
-    uri = uri.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())));
-  }
+    required String method,
+    required String url,
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+    Map<String, dynamic>? queryParams,
+  }) async {
+    // 1. Setup URL & Query Params
+    Uri uri = Uri.parse(url);
+    if (queryParams != null) {
+      uri = uri.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())));
+    }
 
-  // 2. Setup Headers
-  final requestHeaders = <String, String>{
-    'Content-Type': 'application/json',
-    ...?headers,
-  };
-  if (_accessToken != null) {
-    requestHeaders['Authorization'] = 'Bearer $accessToken';
-  }
+    // 2. Setup Headers
+    final requestHeaders = <String, String>{
+      'Content-Type': 'application/json',
+      ...?headers,
+    };
+    if (_accessToken != null) {
+      requestHeaders['Authorization'] = 'Bearer $accessToken';
+    }
 
-  // 3. Execute
-  final stopwatch = Stopwatch()..start();
-  http.Response response;
-  
-  switch (method.toUpperCase()) {
-    case 'GET': response = await http.get(uri, headers: requestHeaders); break;
-    case 'POST': response = await http.post(uri, headers: requestHeaders, body: json.encode(body)); break;
-    case 'PUT': response = await http.put(uri, headers: requestHeaders, body: json.encode(body)); break;
-    case 'DELETE': response = await http.delete(uri, headers: requestHeaders); break;
-    default: throw Exception('Method $method not supported');
-  }
-  stopwatch.stop();
+    // 3. Execute — supports all standard HTTP methods
+    final stopwatch = Stopwatch()..start();
+    http.Response response;
+    final encodedBody = body != null ? json.encode(body) : null;
+    
+    switch (method.toUpperCase()) {
+      case 'GET':
+        response = await http.get(uri, headers: requestHeaders);
+        break;
+      case 'POST':
+        response = await http.post(uri, headers: requestHeaders, body: encodedBody);
+        break;
+      case 'PUT':
+        response = await http.put(uri, headers: requestHeaders, body: encodedBody);
+        break;
+      case 'DELETE':
+        response = await http.delete(uri, headers: requestHeaders);
+        break;
+      case 'PATCH':
+        response = await http.patch(uri, headers: requestHeaders, body: encodedBody);
+        break;
+      case 'HEAD':
+        response = await http.head(uri, headers: requestHeaders);
+        break;
+      case 'OPTIONS':
+        // http package doesn't have options(), use Client
+        final client = http.Client();
+        final request = http.Request('OPTIONS', uri);
+        request.headers.addAll(requestHeaders);
+        final streamedResponse = await client.send(request);
+        response = await http.Response.fromStream(streamedResponse);
+        client.close();
+        break;
+      default:
+        throw Exception('Method $method not supported');
+    }
+    stopwatch.stop();
 
-  // 4. Format standardized responseInfo
-  return {
-    'status': response.statusCode,
-    'headers': response.headers,
-    'body': response.body.isNotEmpty ? json.decode(response.body) : null,
-    'time': DateTime.now().toIso8601String(),
-    'duration_ms': stopwatch.elapsedMilliseconds,
-  };
-}
+    // 4. Format standardized responseInfo
+    dynamic responseBody;
+    try {
+      responseBody = response.body.isNotEmpty ? json.decode(response.body) : null;
+    } catch (_) {
+      responseBody = response.body;
+    }
+
+    return {
+      'status': response.statusCode,
+      'headers': response.headers,
+      'body': responseBody,
+      'time': DateTime.now().toIso8601String(),
+      'duration_ms': stopwatch.elapsedMilliseconds,
+      'size_bytes': response.contentLength ?? response.body.length,
+    };
+  }
   Future<Map<String, dynamic>> initWorkspaceTemplate(String workspaceId, int templateId) async {
     final url = Uri.parse('$baseUrl/workspaces/$workspaceId/initialize');
     
