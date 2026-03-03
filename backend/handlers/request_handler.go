@@ -198,6 +198,52 @@ func (h *RequestHandler) Execute(c *gin.Context) {
 	c.JSON(http.StatusOK, execution)
 }
 
+// QuickExecuteRequest represents the payload for an ad-hoc request execution.
+type QuickExecuteRequest struct {
+	Method  string            `json:"method" binding:"required"`
+	URL     string            `json:"url" binding:"required"`
+	Headers map[string]string `json:"headers"`
+	Body    interface{}       `json:"body"`
+}
+
+// QuickExecute handles execution of ad-hoc requests for tracing purposes.
+func (h *RequestHandler) QuickExecute(c *gin.Context) {
+	userID, _ := middlewares.GetUserID(c)
+	workspaceID, err := uuid.Parse(c.Param("workspace_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	var req QuickExecuteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert body to JSON string if it exists
+	var bodyStr string
+	if req.Body != nil {
+		bodyBytes, _ := json.Marshal(req.Body)
+		bodyStr = string(bodyBytes)
+	}
+
+	execution, err := h.requestService.QuickExecute(
+		workspaceID,
+		userID,
+		req.Method,
+		req.URL,
+		bodyStr,
+		req.Headers,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, execution)
+}
+
 // GetHistory retrieves execution history of a request, with pagination support.
 func (h *RequestHandler) GetHistory(c *gin.Context) {
 	userID, _ := middlewares.GetUserID(c)

@@ -303,3 +303,32 @@ type ServiceTracingConfig struct {
 	UpdatedAt           time.Time      `json:"updated_at"`
 	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// AuditLog represents an action taken in the system
+type AuditLog struct {
+	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	WorkspaceID  uuid.UUID      `gorm:"type:uuid;not null" json:"workspace_id"`
+	UserID       uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	Action       string         `gorm:"not null" json:"action"`
+	ResourceType string         `gorm:"not null" json:"resource_type"`
+	ResourceID   string         `json:"resource_id"`
+	Details      string         `gorm:"type:jsonb" json:"details"`
+	IPAddress    string         `json:"ip_address"`
+	UserAgent    string         `json:"user_agent"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// Alert represents an alert rule
+type Alert struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	WorkspaceID uuid.UUID      `gorm:"type:uuid;not null" json:"workspace_id"`
+	Name        string         `gorm:"not null" json:"name"`
+	Description string         `json:"description"`
+	Condition   string         `gorm:"type:jsonb;not null" json:"condition"`
+	Status      string         `gorm:"default:'active'" json:"status"`
+	TriggeredAt *time.Time     `json:"triggered_at"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}

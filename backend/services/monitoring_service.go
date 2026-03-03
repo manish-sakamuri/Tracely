@@ -1,9 +1,9 @@
 package services
 
 import (
+	"backend/models"
 	"errors"
 	"time"
-	"backend/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,13 +15,13 @@ type MonitoringService struct {
 }
 
 type DashboardData struct {
-	TotalRequests      int64                  `json:"total_requests"`
-	SuccessfulRequests int64                  `json:"successful_requests"`
-	FailedRequests     int64                  `json:"failed_requests"`
-	AvgResponseTimeMs  float64                `json:"avg_response_time_ms"`
-	P95ResponseTimeMs  float64                `json:"p95_response_time_ms"`
-	P99ResponseTimeMs  float64                `json:"p99_response_time_ms"`
-	ErrorRate          float64                `json:"error_rate"`
+	TotalRequests      int64                    `json:"total_requests"`
+	SuccessfulRequests int64                    `json:"successful_requests"`
+	FailedRequests     int64                    `json:"failed_requests"`
+	AvgResponseTimeMs  float64                  `json:"avg_response_time_ms"`
+	P95ResponseTimeMs  float64                  `json:"p95_response_time_ms"`
+	P99ResponseTimeMs  float64                  `json:"p99_response_time_ms"`
+	ErrorRate          float64                  `json:"error_rate"`
 	TopEndpoints       []map[string]interface{} `json:"top_endpoints"`
 	Services           []map[string]interface{} `json:"services"`
 }
@@ -80,7 +80,7 @@ func (s *MonitoringService) GetDashboard(workspaceID, userID uuid.UUID, timeRang
 		Where("timestamp >= ?", startTime).
 		Select("AVG(response_time_ms)").
 		Row().Scan(&avgTime)
-	
+
 	if avgTime != nil {
 		dashboard.AvgResponseTimeMs = *avgTime
 	}
@@ -92,23 +92,24 @@ func (s *MonitoringService) GetDashboard(workspaceID, userID uuid.UUID, timeRang
 	}
 
 	// Get services
-	var traces []models.Trace
-	s.db.Where("workspace_id = ? AND start_time >= ?", workspaceID, startTime).
-		Group("service_name").
-		Find(&traces)
+	var serviceNames []string
+	s.db.Model(&models.Trace{}).
+		Where("workspace_id = ? AND start_time >= ?", workspaceID, startTime).
+		Distinct("service_name").
+		Pluck("service_name", &serviceNames)
 
-	for _, trace := range traces {
+	for _, serviceName := range serviceNames {
 		serviceData := map[string]interface{}{
-			"name":          trace.ServiceName,
+			"name":          serviceName,
 			"status":        "healthy",
 			"request_count": 0,
 		}
 
 		var count int64
 		s.db.Model(&models.Trace{}).
-			Where("workspace_id = ? AND service_name = ? AND start_time >= ?", workspaceID, trace.ServiceName, startTime).
+			Where("workspace_id = ? AND service_name = ? AND start_time >= ?", workspaceID, serviceName, startTime).
 			Count(&count)
-		
+
 		serviceData["request_count"] = count
 		dashboard.Services = append(dashboard.Services, serviceData)
 	}
@@ -134,7 +135,7 @@ func (s *MonitoringService) GetTopology(workspaceID, userID uuid.UUID) (map[stri
 
 	for _, span := range spans {
 		services[span.ServiceName] = true
-		
+
 		if span.ParentSpanID != nil {
 			var parentSpan models.Span
 			if err := s.db.First(&parentSpan, span.ParentSpanID).Error; err == nil {

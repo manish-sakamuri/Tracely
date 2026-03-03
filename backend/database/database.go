@@ -83,6 +83,8 @@ func RunMigrations(db *gorm.DB) error {
 		&models.EnvironmentVariable{},
 		&models.EnvironmentSecret{},
 		&models.ServiceTracingConfig{},
+		&models.AuditLog{},
+		&models.Alert{},
 	)
 
 	if err != nil {

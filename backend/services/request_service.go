@@ -210,6 +210,175 @@ func (s *RequestService) Execute(
 		return nil, err
 	}
 
+	// Get collection and workspace info for trace
+	var collection models.Collection
+	s.db.First(&collection, request.CollectionID)
+
+	// Create Trace record
+	status := "success"
+	if execution.StatusCode >= 400 || execution.ErrorMessage != "" {
+		status = "error"
+	}
+
+	trace := models.Trace{
+		ID:              traceID,
+		WorkspaceID:     collection.WorkspaceID,
+		ServiceName:     request.Name,
+		SpanCount:       1,
+		TotalDurationMs: float64(responseTime),
+		StartTime:       startTime,
+		EndTime:         time.Now(),
+		Status:          status,
+	}
+
+	if err := s.db.Create(&trace).Error; err != nil {
+		// Log but don't fail - execution was already saved
+		return &execution, nil
+	}
+
+	// Create Span record
+	span := models.Span{
+		ID:            *spanID,
+		TraceID:       traceID,
+		ParentSpanID:  parentSpanID,
+		OperationName: request.Name,
+		ServiceName:   request.Name,
+		StartTime:     startTime,
+		DurationMs:    float64(responseTime),
+		Status:        "ok",
+	}
+
+	// Add response status as tags
+	tagsData := map[string]interface{}{
+		"http.method":           request.Method,
+		"http.url":              url,
+		"http.status_code":      execution.StatusCode,
+		"execution.response_ms": responseTime,
+	}
+	tagsJSON, _ := json.Marshal(tagsData)
+	span.Tags = string(tagsJSON)
+
+	s.db.Create(&span)
+
+	return &execution, nil
+}
+
+// QuickExecute sends an ad-hoc HTTP request and records its trace without requiring a saved request object.
+func (s *RequestService) QuickExecute(
+	workspaceID, userID uuid.UUID,
+	method, url, body string,
+	headers map[string]string,
+) (*models.Execution, error) {
+
+	// Verify user has access to the workspace
+	if !s.workspaceService.HasAccess(workspaceID, userID) {
+		return nil, errors.New("access denied")
+	}
+
+	startTime := time.Now()
+	traceID := uuid.New()
+	spanID := uuid.New()
+
+	// Prepare request body
+	var reqBody io.Reader
+	if body != "" {
+		reqBody = bytes.NewBufferString(body)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	for k, v := range headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	// Add trace and span IDs for propagation
+	httpReq.Header.Set("X-Trace-ID", traceID.String())
+	httpReq.Header.Set("X-Span-ID", spanID.String())
+
+	// Execute HTTP request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(httpReq)
+	responseTime := time.Since(startTime).Milliseconds()
+
+	// Record execution details
+	execution := models.Execution{
+		ResponseTimeMs: responseTime,
+		TraceID:        traceID,
+		SpanID:         &spanID,
+		Timestamp:      startTime,
+	}
+
+	if err != nil {
+		execution.ErrorMessage = err.Error()
+		execution.StatusCode = 0
+	} else {
+		defer resp.Body.Close()
+		execution.StatusCode = resp.StatusCode
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		execution.ResponseBody = string(bodyBytes)
+		headersJSON, _ := json.Marshal(resp.Header)
+		execution.ResponseHeaders = string(headersJSON)
+	}
+
+	// Create Trace record
+	status := "success"
+	if execution.StatusCode >= 400 || execution.ErrorMessage != "" {
+		status = "error"
+	}
+
+	// For quick execute, we use the URL as the service name if no name is provided
+	serviceName := "Ad-hoc Request"
+	if len(url) > 30 {
+		serviceName = url[:27] + "..."
+	} else {
+		serviceName = url
+	}
+
+	trace := models.Trace{
+		ID:              traceID,
+		WorkspaceID:     workspaceID,
+		ServiceName:     serviceName,
+		SpanCount:       1,
+		TotalDurationMs: float64(responseTime),
+		StartTime:       startTime,
+		EndTime:         time.Now(),
+		Status:          status,
+	}
+
+	if err := s.db.Create(&trace).Error; err != nil {
+		return nil, err
+	}
+
+	// Create Span record
+	span := models.Span{
+		ID:            spanID,
+		TraceID:       traceID,
+		OperationName: method + " " + url,
+		ServiceName:   serviceName,
+		StartTime:     startTime,
+		DurationMs:    float64(responseTime),
+		Status:        "ok",
+	}
+
+	tagsData := map[string]interface{}{
+		"http.method":           method,
+		"http.url":              url,
+		"http.status_code":      execution.StatusCode,
+		"execution.response_ms": responseTime,
+		"request.type":          "quick_execute",
+	}
+	tagsJSON, _ := json.Marshal(tagsData)
+	span.Tags = string(tagsJSON)
+
+	if err := s.db.Create(&span).Error; err != nil {
+		return nil, err
+	}
+
 	return &execution, nil
 }
 

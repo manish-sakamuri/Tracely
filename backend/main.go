@@ -229,6 +229,7 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 				workspaces.DELETE("/:workspace_id/requests/:request_id", requestHandler.Delete)
 				workspaces.POST("/:workspace_id/requests/:request_id/execute", requestHandler.Execute)
 				workspaces.GET("/:workspace_id/requests/:request_id/history", requestHandler.GetHistory)
+				workspaces.POST("/:workspace_id/trace/quick-execute", requestHandler.QuickExecute)
 
 				// Trace routes
 				workspaces.GET("/:workspace_id/traces", traceHandler.GetTraces)
