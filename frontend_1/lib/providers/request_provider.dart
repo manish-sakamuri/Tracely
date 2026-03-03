@@ -17,6 +17,8 @@ class RequestProvider extends ChangeNotifier {
   Map<String, dynamic>? get lastRequest => _lastRequest;
   String? get error => _error;
   List<Map<String, dynamic>> get history => _history;
+  bool _tracingEnabled = true;
+  bool get tracingEnabled => _tracingEnabled;
 
   // Properties for request data
   String _method = 'GET';
@@ -64,7 +66,19 @@ class RequestProvider extends ChangeNotifier {
           overrideHeaders: overrideHeaders,
         );
       } 
-      // MODE B: Direct Execution (local HTTP)
+      // MODE B: Quick Trace Execution (ad-hoc tracing)
+      else if (workspaceId != null && _tracingEnabled) {
+        responseInfo = await _apiService.quickExecuteRequest(
+          workspaceId,
+          {
+            'method': method,
+            'url': overrideUrl ?? url,
+            'headers': headers ?? {},
+            'body': body,
+          },
+        );
+      }
+      // MODE C: Direct Execution (local HTTP)
       else {
         responseInfo = await _apiService.sendDirectRequest(
           method: method,
@@ -180,8 +194,13 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTracingEnabled(bool enabled) {
+    _tracingEnabled = enabled;
+    notifyListeners();
+  }
+
   // Send request method
-Future<Map<String, dynamic>> sendRequest() async {
+Future<Map<String, dynamic>> sendRequest({String? workspaceId}) async {
   Map<String, dynamic>? bodyMap;
   if (_body.isNotEmpty) {
     try {
@@ -198,6 +217,7 @@ Future<Map<String, dynamic>> sendRequest() async {
     url: _url,
     body: bodyMap, // Now matches the required Map<String, dynamic>? type
     headers: _headers,
+    workspaceId: workspaceId,
   );
 }
 

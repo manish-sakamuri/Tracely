@@ -345,6 +345,19 @@ class ApiService {
     return await _handleResponse(response);
   }
 
+  Future<Map<String, dynamic>> quickExecuteRequest(
+    String workspaceId,
+    Map<String, dynamic> requestData,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/workspaces/$workspaceId/trace/quick-execute'),
+      headers: await _getHeaders(),
+      body: json.encode(requestData),
+    );
+
+    return await _handleResponse(response);
+  }
+
   Future<Map<String, dynamic>> getRequestById(String workspaceId, String requestId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/requests/$requestId'),

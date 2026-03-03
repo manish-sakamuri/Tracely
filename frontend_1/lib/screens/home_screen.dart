@@ -743,31 +743,31 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSpacing: 12,
             childAspectRatio: 1.4,
             children: [
-              _buildServiceCard('Trace Service', 'Capture & store spans', Icons.timeline, Colors.blue),
-              _buildServiceCard('Waterfall', 'Visualize span trees', Icons.waterfall_chart, Colors.indigo),
-              _buildServiceCard('Tracing Config', 'Sampling rules', Icons.tune, Colors.purple),
-              _buildServiceCard('Percentile Calc', 'P95/P99 analysis', Icons.analytics, Colors.deepPurple),
-              _buildServiceCard('Replay Engine', 'Reproduce bugs', Icons.replay, Colors.teal),
-              _buildServiceCard('Test Data Gen', 'Realistic mock data', Icons.data_array, Colors.green),
-              _buildServiceCard('Mock Service', 'Simulate APIs', Icons.cloud_off, Colors.orange),
-              _buildServiceCard('Load Testing', 'Stress test APIs', Icons.speed, Colors.red),
-              _buildServiceCard('Failure Injection', 'Chaos engineering', Icons.warning_amber, Colors.deepOrange),
-              _buildServiceCard('Workflow Engine', 'Chain API scenarios', Icons.account_tree, Colors.cyan),
-              _buildServiceCard('Request Service', 'HTTP client wrapper', Icons.http, Colors.blueGrey),
-              _buildServiceCard('Schema Validator', 'Contract validation', Icons.verified, Colors.lightGreen),
-              _buildServiceCard('Mutation Testing', 'Fuzz test variables', Icons.shuffle, Colors.amber),
-              _buildServiceCard('Workspace Svc', 'Multi-tenant isolation', Icons.workspaces, Colors.grey),
-              _buildServiceCard('Auth Service', 'JWT & Bcrypt security', Icons.security, Colors.brown),
-              _buildServiceCard('Secrets Vault', 'Encrypted key mgmt', Icons.lock, Colors.pink),
-              _buildServiceCard('Webhook Service', 'Event notifications', Icons.webhook, Colors.lime),
-              _buildServiceCard('Audit Service', 'Action logging', Icons.history, Colors.blue),
-              _buildServiceCard('Settings Svc', 'User preferences', Icons.settings, Colors.blueGrey),
-              _buildServiceCard('Environment Svc', 'Dev/Staging/Prod', Icons.swap_horiz, Colors.indigo),
-              _buildServiceCard('Governance', 'PII masking & policies', Icons.policy, Colors.deepPurple),
-              _buildServiceCard('Session Svc', 'Debug sessions', Icons.access_time, Colors.teal),
-              _buildServiceCard('Monitoring', 'System health', Icons.monitor_heart, Colors.red),
-              _buildServiceCard('Alerting', 'Threshold alerts', Icons.notifications_active, Colors.orange),
-              _buildServiceCard('Collections', 'Organize API suites', Icons.folder, Colors.cyan),
+              _buildServiceCard('Trace Service', 'Capture & store spans', Icons.timeline, Colors.blue, 3), // TracesScreen
+              _buildServiceCard('Waterfall', 'Visualize span trees', Icons.waterfall_chart, Colors.indigo, 23),
+              _buildServiceCard('Tracing Config', 'Sampling rules', Icons.tune, Colors.purple, 22),
+              _buildServiceCard('Percentile Calc', 'P95/P99 analysis', Icons.analytics, Colors.deepPurple, 21),
+              _buildServiceCard('Replay Engine', 'Reproduce bugs', Icons.replay, Colors.teal, 4),
+              _buildServiceCard('Test Data Gen', 'Realistic mock data', Icons.data_array, Colors.green, 11),
+              _buildServiceCard('Mock Service', 'Simulate APIs', Icons.cloud_off, Colors.orange, 8),
+              _buildServiceCard('Load Testing', 'Stress test APIs', Icons.speed, Colors.red, 9),
+              _buildServiceCard('Failure Injection', 'Chaos engineering', Icons.warning_amber, Colors.deepOrange, 12),
+              _buildServiceCard('Workflow Engine', 'Chain API scenarios', Icons.account_tree, Colors.cyan, 14),
+              _buildServiceCard('Request Service', 'HTTP client wrapper', Icons.http, Colors.blueGrey, 1),
+              _buildServiceCard('Schema Validator', 'Contract validation', Icons.verified, Colors.lightGreen, 10),
+              _buildServiceCard('Mutation Testing', 'Fuzz test variables', Icons.shuffle, Colors.amber, 13),
+              _buildServiceCard('Workspace Svc', 'Multi-tenant isolation', Icons.workspaces, Colors.grey, 5),
+              _buildServiceCard('Auth Service', 'JWT & Bcrypt security', Icons.security, Colors.brown, 7),
+              _buildServiceCard('Secrets Vault', 'Encrypted key mgmt', Icons.lock, Colors.pink, 16),
+              _buildServiceCard('Webhook Service', 'Event notifications', Icons.webhook, Colors.lime, 15),
+              _buildServiceCard('Audit Service', 'Action logging', Icons.history, Colors.blue, 17),
+              _buildServiceCard('Settings Svc', 'User preferences', Icons.settings, Colors.blueGrey, 7),
+              _buildServiceCard('Environment Svc', 'Dev/Staging/Prod', Icons.swap_horiz, Colors.indigo, 19),
+              _buildServiceCard('Governance', 'PII masking & policies', Icons.policy, Colors.deepPurple, 6),
+              _buildServiceCard('Session Svc', 'Debug sessions', Icons.access_time, Colors.teal, 4),
+              _buildServiceCard('Monitoring', 'System health', Icons.monitor_heart, Colors.red, 20),
+              _buildServiceCard('Alerting', 'Threshold alerts', Icons.notifications_active, Colors.orange, 18),
+              _buildServiceCard('Collections', 'Organize API suites', Icons.folder, Colors.cyan, 2),
             ],
           ),
           const SizedBox(height: 32),
@@ -928,30 +928,37 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildServiceCard(String title, String desc, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _buildServiceCard(String title, String desc, IconData icon, Color color, int navIndex) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _selectedNav = navIndex),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, size: 14, color: color),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
-          const SizedBox(height: 2),
-          Text(desc, style: TextStyle(fontSize: 9, color: Colors.grey.shade500), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, size: 14, color: color),
+              ),
+              const SizedBox(height: 8),
+              Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade900)),
+              const SizedBox(height: 2),
+              Text(desc, style: TextStyle(fontSize: 9, color: Colors.grey.shade500), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/request_provider.dart';
+import '../providers/workspace_provider.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -159,8 +160,12 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
         }
       }
       
-      // Send the request
-      final response = await requestProvider.sendRequest();
+      
+      // Send the request with workspace ID to enable tracing if applicable
+      final workspaceProvider = context.read<WorkspaceProvider>();
+      final workspaceId = workspaceProvider.selectedWorkspace?['id']?.toString();
+      
+      final response = await requestProvider.sendRequest(workspaceId: workspaceId);
       developer.log('Response received: $response');
       
       if (mounted) {
@@ -405,6 +410,46 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                     ],
                                   ),
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              
+                              // Tracing Toggle
+                              Consumer<RequestProvider>(
+                                builder: (context, provider, child) {
+                                  final workspaceProvider = context.watch<WorkspaceProvider>();
+                                  final hasWorkspace = workspaceProvider.selectedWorkspace != null;
+                                  
+                                  return Tooltip(
+                                    message: hasWorkspace ? 'Enable distributed tracing via backend' : 'Select a workspace to enable tracing',
+                                    child: Container(
+                                      height: 40,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: hasWorkspace ? Colors.blue.shade200 : Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(6),
+                                        color: hasWorkspace ? Colors.blue.shade50 : Colors.grey.shade50,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.timeline, 
+                                            size: 16, 
+                                            color: hasWorkspace ? Colors.blue.shade700 : Colors.grey.shade400
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Switch(
+                                            value: provider.tracingEnabled && hasWorkspace,
+                                            onChanged: hasWorkspace ? (value) {
+                                              provider.setTracingEnabled(value);
+                                            } : null,
+                                            activeColor: Colors.blue.shade700,
+                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                               const SizedBox(width: 8),
                               

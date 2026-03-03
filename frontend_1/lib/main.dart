@@ -17,6 +17,18 @@ import 'providers/monitoring_provider.dart';
 import 'providers/schema_validator_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/test_data_generator_provider.dart';
+import 'providers/alert_provider.dart';
+import 'providers/audit_provider.dart';
+import 'providers/failure_injection_provider.dart';
+import 'providers/load_test_provider.dart';
+import 'providers/mock_provider.dart';
+import 'providers/mutation_provider.dart';
+import 'providers/percentile_provider.dart';
+import 'providers/secrets_provider.dart';
+import 'providers/tracing_config_provider.dart';
+import 'providers/waterfall_provider.dart';
+import 'providers/webhook_provider.dart';
+import 'providers/workflow_provider.dart';
 
 
 void main() async { 
@@ -41,6 +53,18 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SchemaValidatorProvider()),
         ChangeNotifierProvider(create: (_) => TestDataGeneratorProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => AlertProvider()),
+        ChangeNotifierProvider(create: (_) => AuditProvider()),
+        ChangeNotifierProvider(create: (_) => FailureInjectionProvider()),
+        ChangeNotifierProvider(create: (_) => LoadTestProvider()),
+        ChangeNotifierProvider(create: (_) => MockProvider()),
+        ChangeNotifierProvider(create: (_) => MutationProvider()),
+        ChangeNotifierProvider(create: (_) => PercentileProvider()),
+        ChangeNotifierProvider(create: (_) => SecretsProvider()),
+        ChangeNotifierProvider(create: (_) => TracingConfigProvider()),
+        ChangeNotifierProvider(create: (_) => WaterfallProvider()),
+        ChangeNotifierProvider(create: (_) => WebhookProvider()),
+        ChangeNotifierProvider(create: (_) => WorkflowProvider()),
       ],
       child: const TracelyApp(),
     ),
