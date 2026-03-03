@@ -82,6 +82,9 @@ func RunMigrations(db *gorm.DB) error {
 		&models.Environment{},
 		&models.EnvironmentVariable{},
 		&models.EnvironmentSecret{},
+		&models.TestRun{},
+		&models.UserLog{},
+		&models.DeviceToken{},
 	)
 
 	if err != nil {
@@ -136,6 +139,20 @@ func createIndexes(db *gorm.DB) {
 	// Mock indexes
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_mocks_workspace_id ON mocks(workspace_id);")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_mocks_enabled ON mocks(enabled);")
+
+	// TestRun indexes
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_test_runs_user_id ON test_runs(user_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_test_runs_created_at ON test_runs(created_at);")
+
+	// UserLog indexes
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_logs_user_id ON user_logs(user_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_logs_level ON user_logs(level);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at);")
+
+	// Alert indexes
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_workspace_id ON alerts(workspace_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_alert_rules_workspace_id ON alert_rules(workspace_id);")
 
 	log.Println("Database indexes created")
 }

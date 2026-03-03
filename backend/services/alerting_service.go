@@ -1,7 +1,6 @@
 package services
 
 import (
-	"backend/models"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -11,30 +10,31 @@ import (
 )
 
 type AlertRule struct {
-	ID                  uuid.UUID `gorm:"type:uuid;primary_key"`
-	WorkspaceID         uuid.UUID `gorm:"type:uuid;not null"`
-	Name                string    `gorm:"not null"`
-	Condition           string    `gorm:"not null"` // latency_threshold, error_rate, etc.
-	Threshold           float64   `gorm:"not null"`
-	TimeWindow          int       `gorm:"not null"` // minutes
-	Enabled             bool      `gorm:"default:true"`
-	NotificationChannel string    `gorm:"not null"` // slack, email, pagerduty
-	NotificationConfig  string    `gorm:"type:jsonb"`
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                  uuid.UUID `gorm:"type:uuid;primary_key" json:"id"`
+	WorkspaceID         uuid.UUID `gorm:"type:uuid;not null" json:"workspace_id"`
+	Name                string    `gorm:"not null" json:"name"`
+	Type                string    `gorm:"not null;default:'latency'" json:"type"` // latency, error_rate, request_count
+	Condition           string    `gorm:"not null" json:"condition"`              // latency_threshold, error_rate, etc.
+	Threshold           float64   `gorm:"not null" json:"threshold"`
+	TimeWindow          int       `gorm:"not null" json:"time_window"` // minutes
+	Enabled             bool      `gorm:"default:true" json:"enabled"`
+	NotificationChannel string    `gorm:"not null" json:"notification_channel"` // slack, email, pagerduty
+	NotificationConfig  string    `gorm:"type:jsonb" json:"notification_config"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 type Alert struct {
-	ID          uuid.UUID `gorm:"type:uuid;primary_key"`
-	RuleID      uuid.UUID `gorm:"type:uuid;not null"`
-	WorkspaceID uuid.UUID `gorm:"type:uuid;not null"`
-	Severity    string    `gorm:"not null"` // critical, warning, info
-	Message     string    `gorm:"type:text"`
-	TriggeredAt time.Time `gorm:"not null"`
-	ResolvedAt  *time.Time
-	Status      string `gorm:"default:'active'"` // active, resolved, acknowledged
-	Metadata    string `gorm:"type:jsonb"`
-	CreatedAt   time.Time
+	ID          uuid.UUID  `gorm:"type:uuid;primary_key" json:"id"`
+	RuleID      uuid.UUID  `gorm:"type:uuid;not null" json:"rule_id"`
+	WorkspaceID uuid.UUID  `gorm:"type:uuid;not null" json:"workspace_id"`
+	Severity    string     `gorm:"not null" json:"severity"` // critical, warning, info
+	Message     string     `gorm:"type:text" json:"message"`
+	TriggeredAt time.Time  `gorm:"not null" json:"triggered_at"`
+	ResolvedAt  *time.Time `json:"resolved_at"`
+	Status      string     `gorm:"default:'active'" json:"status"` // active, resolved, acknowledged
+	Metadata    string     `gorm:"type:jsonb" json:"metadata"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type AlertingService struct {
@@ -51,6 +51,7 @@ func (s *AlertingService) CreateRule(userID uuid.UUID, workspaceID uuid.UUID, na
 		ID:                  uuid.New(),
 		WorkspaceID:         workspaceID,
 		Name:                name,
+		Type:                condition, // Use condition as the type
 		Condition:           condition,
 		Threshold:           threshold,
 		TimeWindow:          timeWindow,
@@ -65,80 +66,38 @@ func (s *AlertingService) CreateRule(userID uuid.UUID, workspaceID uuid.UUID, na
 	return &rule, nil
 }
 
-// CheckLatencyThreshold checks if latency exceeds threshold
-func (s *AlertingService) CheckLatencyThreshold(workspaceID uuid.UUID) error {
+// GetRulesByWorkspace returns all enabled alert rules for a workspace.
+// Used by the alert engine to evaluate rules periodically.
+func (s *AlertingService) GetRulesByWorkspace(workspaceID uuid.UUID) ([]AlertRule, error) {
 	var rules []AlertRule
-	s.db.Where("workspace_id = ? AND condition = 'latency_threshold' AND enabled = true", workspaceID).Find(&rules)
+	err := s.db.Where("workspace_id = ? AND enabled = true", workspaceID).Find(&rules).Error
+	return rules, err
+}
 
-	for _, rule := range rules {
-		// Get average latency in time window
-		var avgLatency float64
-		timeAgo := time.Now().Add(-time.Duration(rule.TimeWindow) * time.Minute)
-
-		s.db.Model(&models.Execution{}).
-			Select("AVG(response_time_ms)").
-			Joins("JOIN requests ON requests.id = executions.request_id").
-			Joins("JOIN collections ON collections.id = requests.collection_id").
-			Where("collections.workspace_id = ? AND executions.timestamp >= ?", workspaceID, timeAgo).
-			Row().Scan(&avgLatency)
-
-		if avgLatency > rule.Threshold {
-			// Trigger alert
-			s.TriggerAlert(rule.ID, workspaceID, "critical",
-				fmt.Sprintf("Average latency (%.2fms) exceeded threshold (%.2fms)", avgLatency, rule.Threshold),
-				map[string]interface{}{
-					"current_value": avgLatency,
-					"threshold":     rule.Threshold,
-					"time_window":   rule.TimeWindow,
-				})
-		}
+// CheckLatencyThreshold checks if latency exceeds threshold
+func (s *AlertingService) CheckLatencyThreshold(workspaceID uuid.UUID, currentLatency, threshold time.Duration) error {
+	if currentLatency > threshold {
+		s.TriggerAlert(uuid.Nil, workspaceID, "critical",
+			fmt.Sprintf("Average latency (%.0fms) exceeded threshold (%.0fms)",
+				float64(currentLatency.Milliseconds()), float64(threshold.Milliseconds())),
+			map[string]interface{}{
+				"current_value": currentLatency.Milliseconds(),
+				"threshold":     threshold.Milliseconds(),
+			})
 	}
-
 	return nil
 }
 
 // CheckErrorRate checks if error rate exceeds threshold
-func (s *AlertingService) CheckErrorRate(workspaceID uuid.UUID) error {
-	var rules []AlertRule
-	s.db.Where("workspace_id = ? AND condition = 'error_rate' AND enabled = true", workspaceID).Find(&rules)
-
-	for _, rule := range rules {
-		timeAgo := time.Now().Add(-time.Duration(rule.TimeWindow) * time.Minute)
-
-		var totalCount int64
-		var errorCount int64
-
-		// Get total requests
-		s.db.Model(&models.Execution{}).
-			Joins("JOIN requests ON requests.id = executions.request_id").
-			Joins("JOIN collections ON collections.id = requests.collection_id").
-			Where("collections.workspace_id = ? AND executions.timestamp >= ?", workspaceID, timeAgo).
-			Count(&totalCount)
-
-		// Get error requests (status >= 400)
-		s.db.Model(&models.Execution{}).
-			Joins("JOIN requests ON requests.id = executions.request_id").
-			Joins("JOIN collections ON collections.id = requests.collection_id").
-			Where("collections.workspace_id = ? AND executions.timestamp >= ? AND executions.status_code >= 400", workspaceID, timeAgo).
-			Count(&errorCount)
-
-		if totalCount > 0 {
-			errorRate := float64(errorCount) / float64(totalCount) * 100
-
-			if errorRate > rule.Threshold {
-				s.TriggerAlert(rule.ID, workspaceID, "critical",
-					fmt.Sprintf("Error rate (%.2f%%) exceeded threshold (%.2f%%)", errorRate, rule.Threshold),
-					map[string]interface{}{
-						"error_count": errorCount,
-						"total_count": totalCount,
-						"error_rate":  errorRate,
-						"threshold":   rule.Threshold,
-						"time_window": rule.TimeWindow,
-					})
-			}
-		}
+func (s *AlertingService) CheckErrorRate(workspaceID uuid.UUID, currentRate, threshold float64) error {
+	if currentRate > threshold {
+		s.TriggerAlert(uuid.Nil, workspaceID, "critical",
+			fmt.Sprintf("Error rate (%.2f%%) exceeded threshold (%.2f%%)", currentRate*100, threshold*100),
+			map[string]interface{}{
+				"error_rate": currentRate,
+				"threshold":  threshold,
+			})
 	}
-
 	return nil
 }
 
@@ -161,20 +120,22 @@ func (s *AlertingService) TriggerAlert(ruleID, workspaceID uuid.UUID, severity, 
 		return err
 	}
 
-	// Get rule to determine notification channel
-	var rule AlertRule
-	if err := s.db.First(&rule, ruleID).Error; err != nil {
-		return err
-	}
+	// Only look up rule for notifications if ruleID is not nil
+	if ruleID != uuid.Nil {
+		var rule AlertRule
+		if err := s.db.First(&rule, ruleID).Error; err != nil {
+			return err
+		}
 
-	// Send notification based on channel
-	switch rule.NotificationChannel {
-	case "slack":
-		return s.SendSlackNotification(&alert, &rule)
-	case "email":
-		return s.SendEmailNotification(&alert, &rule)
-	case "pagerduty":
-		return s.SendPagerDutyNotification(&alert, &rule)
+		// Send notification based on channel
+		switch rule.NotificationChannel {
+		case "slack":
+			return s.SendSlackNotification(&alert, &rule)
+		case "email":
+			return s.SendEmailNotification(&alert, &rule)
+		case "pagerduty":
+			return s.SendPagerDutyNotification(&alert, &rule)
+		}
 	}
 
 	return nil
@@ -183,7 +144,6 @@ func (s *AlertingService) TriggerAlert(ruleID, workspaceID uuid.UUID, severity, 
 // SendSlackNotification sends alert to Slack
 func (s *AlertingService) SendSlackNotification(alert *Alert, rule *AlertRule) error {
 	// Implementation would use Slack webhook
-	// For now, just log
 	fmt.Printf("SLACK ALERT: [%s] %s\n", alert.Severity, alert.Message)
 	return nil
 }
@@ -223,4 +183,23 @@ func (s *AlertingService) GetActiveAlerts(workspaceID uuid.UUID) ([]Alert, error
 		Order("triggered_at DESC").
 		Find(&alerts).Error
 	return alerts, err
+}
+
+// GetAllAlerts gets all alerts for a workspace (active, resolved, acknowledged)
+// with optional severity filtering and pagination.
+func (s *AlertingService) GetAllAlerts(workspaceID uuid.UUID, severity string, limit, offset int) ([]Alert, int64, error) {
+	var alerts []Alert
+	var total int64
+
+	query := s.db.Where("workspace_id = ?", workspaceID)
+	if severity != "" && severity != "All" {
+		query = query.Where("severity = ?", severity)
+	}
+
+	if err := query.Model(&Alert{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Order("triggered_at DESC").Limit(limit).Offset(offset).Find(&alerts).Error
+	return alerts, total, err
 }

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "891896381203",
+    "project_id": "tracely-eb2e3",
+    "storage_bucket": "tracely-eb2e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:891896381203:android:2cf62461e0356e409ee4e6",
+        "android_client_info": {
+          "package_name": "com.tracely.tracely"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "891896381203-27jn6142n2qbr52lu7fts4kr2tkpfb8h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCl5rI0VmMPiplmVQoMPqFGHvFcvcmMqX8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "891896381203-27jn6142n2qbr52lu7fts4kr2tkpfb8h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

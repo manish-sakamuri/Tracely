@@ -99,7 +99,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Icon(Icons.arrow_drop_down),
                   ],
                 ),
-                onSelected: (v) => setState(() => _environment = v),
+                onSelected: (v) async {
+                  setState(() => _environment = v);
+                  // Persist environment selection to backend
+                  try {
+                    await ApiService().updateEnvironment(v.toLowerCase());
+                  } catch (e) {
+                    debugPrint('[HomeScreen] Environment update failed: $e');
+                  }
+                  _loadData(); // Reload dashboard with new environment
+                },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
                       value: 'Production', child: Text('Production')),

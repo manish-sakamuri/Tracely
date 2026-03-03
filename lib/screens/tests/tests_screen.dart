@@ -29,6 +29,35 @@ class _TestsScreenState extends State<TestsScreen> {
   String? _responseError;
 
   @override
+  void initState() {
+    super.initState();
+    _loadTestRuns();
+  }
+
+  Future<void> _loadTestRuns() async {
+    try {
+      final data = await ApiService().getTestRuns();
+      final runs = (data['test_runs'] ?? []) as List<dynamic>;
+      if (mounted) {
+        setState(() {
+          _runs.clear();
+          for (final r in runs) {
+            _runs.add(_TestRun(
+              method: (r['method'] ?? 'GET') as String,
+              url: (r['url'] ?? '') as String,
+              statusCode: (r['status_code'] as num?)?.toInt() ?? 0,
+              responseBody: (r['response_body'] ?? '') as String,
+              id: (r['id'] ?? '') as String,
+            ));
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[TestsScreen] Failed to load test runs: $e');
+    }
+  }
+
+  @override
   void dispose() {
     _urlController.dispose();
     _bodyController.dispose();
@@ -105,6 +134,8 @@ class _TestsScreenState extends State<TestsScreen> {
 
       debugPrint('[TestsScreen] ${_methodLabel(_method)} $url');
 
+      // Measure response time
+      final stopwatch = Stopwatch()..start();
       http.Response response;
 
       switch (_method) {
@@ -124,17 +155,56 @@ class _TestsScreenState extends State<TestsScreen> {
           response = await http.patch(uri, headers: headers, body: body);
           break;
       }
+      stopwatch.stop();
+      final responseTimeMs = stopwatch.elapsedMilliseconds;
+
+      // Log curl-equivalent for debugging
+      if (kDebugMode) {
+        final curlParts = <String>['curl -X ${_methodLabel(_method)}'];
+        curlParts.add('"$url"');
+        headers.forEach((k, v) => curlParts.add('-H "$k: $v"'));
+        if (body != null) curlParts.add("-d '$body'");
+        debugPrint('[TestsScreen] curl: ${curlParts.join(' ')}');
+      }
 
       if (!mounted) return;
+
+      final statusCode = response.statusCode;
+      String formattedBody;
+      try {
+        final decoded = json.decode(response.body);
+        formattedBody = const JsonEncoder.withIndent('  ').convert(decoded);
+      } catch (_) {
+        formattedBody = response.body;
+      }
+
+      // Save the test run to the backend
+      try {
+        await ApiService().createTestRun(
+          method: _methodLabel(_method),
+          url: _buildUrl(rawUrl),
+          statusCode: statusCode,
+          requestBody: body,
+          responseBody: response.body.length > 5000
+              ? response.body.substring(0, 5000)
+              : response.body,
+          responseTimeMs: responseTimeMs,
+        );
+        // Reload the runs list
+        _loadTestRuns();
+      } catch (e) {
+        debugPrint('[TestsScreen] Failed to save test run: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Test run saved locally but failed to persist: $e')),
+          );
+        }
+      }
+
       setState(() {
         _sending = false;
-        _responseStatus = '${response.statusCode}';
-        try {
-          final decoded = json.decode(response.body);
-          _responseBody = const JsonEncoder.withIndent('  ').convert(decoded);
-        } catch (_) {
-          _responseBody = response.body;
-        }
+        _responseStatus = '$statusCode';
+        _responseBody = formattedBody;
       });
     } catch (e) {
       if (!mounted) return;
@@ -161,7 +231,18 @@ class _TestsScreenState extends State<TestsScreen> {
       HttpMethod.post => Colors.blue,
       HttpMethod.put => Colors.amber,
       HttpMethod.delete => Colors.red,
-      HttpMethod.patch => Colors.orange,
+      HttpMethod.patch => Colors.purple,
+    };
+  }
+
+  static Color _methodBadgeColor(String method) {
+    return switch (method.toUpperCase()) {
+      'GET' => Colors.blue,
+      'POST' => Colors.green,
+      'PUT' => Colors.orange,
+      'PATCH' => Colors.purple,
+      'DELETE' => Colors.red,
+      _ => Colors.grey,
     };
   }
 
@@ -188,7 +269,7 @@ class _TestsScreenState extends State<TestsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Center(
-                      child: Text('No test runs yet.',
+                      child: Text('No test runs yet. Send a request to save one.',
                           style: theme.textTheme.bodyMedium),
                     ),
                   ),
@@ -198,20 +279,57 @@ class _TestsScreenState extends State<TestsScreen> {
                   (run) => Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
-                      leading: Icon(
-                        run.passed ? Icons.check_circle : Icons.cancel,
-                        color: run.passed ? Colors.green : Colors.red,
-                        size: 32,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _methodBadgeColor(run.method).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          run.method,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _methodBadgeColor(run.method),
+                          ),
+                        ),
                       ),
-                      title: Text(run.name),
-                      subtitle: Text(run.duration),
-                      trailing: Chip(
-                        label: Text(run.passed ? 'Passed' : 'Failed',
-                            style: const TextStyle(fontSize: 12)),
-                        backgroundColor: run.passed
-                            ? Colors.green.withOpacity(0.2)
-                            : Colors.red.withOpacity(0.2),
+                      title: Text(
+                        run.url,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      subtitle: Text(
+                        'Status: ${run.statusCode}',
+                        style: TextStyle(
+                          color: _statusColor(run.statusCode),
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: run.id.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              color: theme.colorScheme.error,
+                              tooltip: 'Delete run',
+                              onPressed: () async {
+                                try {
+                                  await ApiService().deleteTestRun(run.id);
+                                  _loadTestRuns();
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -374,9 +492,24 @@ class _TestsScreenState extends State<TestsScreen> {
 }
 
 class _TestRun {
-  final String name;
-  final bool passed;
-  final String duration;
+  final String method;
+  final String url;
+  final int statusCode;
+  final String responseBody;
+  final String id;
 
-  _TestRun(this.name, this.passed, this.duration);
+  const _TestRun({
+    required this.method,
+    required this.url,
+    required this.statusCode,
+    required this.responseBody,
+    required this.id,
+  });
+}
+
+Color _statusColor(int code) {
+  if (code >= 200 && code < 300) return Colors.green;
+  if (code >= 400 && code < 500) return Colors.orange;
+  if (code >= 500) return Colors.red;
+  return Colors.grey;
 }

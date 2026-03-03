@@ -47,59 +47,97 @@ class _AlertsScreenState extends State<AlertsScreen> {
         return;
       }
 
-      // Use monitoring dashboard to derive alerts from error data
+      // Try real alerts endpoint first
       try {
-        final dashboard = await ApiService().getMonitoringDashboard(wsId);
+        final data = await ApiService().getAlerts(
+          wsId,
+          severity: _severityFilter == 'All' ? null : _severityFilter,
+        );
         if (!mounted) return;
 
-        final services =
-            (dashboard['services'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
-        final topEndpoints =
-            (dashboard['top_endpoints'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+        final rawAlerts =
+            (data['alerts'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+                [];
 
         final alerts = <_AlertData>[];
         final serviceNames = <String>{'All'};
 
-        for (final svc in services) {
-          final name = svc['name'] ?? 'Unknown';
-          serviceNames.add(name);
-          final status = svc['status'] ?? 'healthy';
-          if (status != 'healthy') {
-            alerts.add(_AlertData(
-              status == 'degraded' ? 'Latency' : 'Error',
-              name,
-              'Now',
-              status == 'degraded' ? 'Medium' : 'Critical',
-            ));
-          }
+        for (final a in rawAlerts) {
+          final svcName = (a['service_name'] ?? a['rule_name'] ?? 'Unknown') as String;
+          final severity = (a['severity'] ?? 'High') as String;
+          final type = (a['condition'] ?? 'Error') as String;
+          final ts = (a['triggered_at'] ?? a['created_at'] ?? '') as String;
+          serviceNames.add(svcName);
+          alerts.add(_AlertData(type, svcName, ts, severity));
         }
 
-        final errorRate = (dashboard['error_rate'] ?? 0).toDouble();
-        if (errorRate > 5) {
-          alerts.insert(
-              0,
-              _AlertData('Error', 'Platform',
-                  'Error rate: ${errorRate.toStringAsFixed(1)}%', 'Critical'));
-        } else if (errorRate > 1) {
-          alerts.insert(
-              0,
-              _AlertData('Error', 'Platform',
-                  'Error rate: ${errorRate.toStringAsFixed(1)}%', 'High'));
+        // If no real alerts, fall back to deriving from monitoring (keeps screen useful)
+        if (alerts.isEmpty) {
+          await _loadAlertsFromMonitoring(wsId, alerts, serviceNames);
         }
 
-        _alerts = alerts;
-        _availableServices = serviceNames;
+        setState(() {
+          _alerts = alerts;
+          _availableServices = serviceNames;
+          _isLoading = false;
+        });
       } catch (_) {
-        // No monitoring data available — show empty
+        // Real endpoint unavailable – fall back to monitoring-derived data
+        final alerts = <_AlertData>[];
+        final serviceNames = <String>{'All'};
+        await _loadAlertsFromMonitoring(wsId, alerts, serviceNames);
+        if (mounted) {
+          setState(() {
+            _alerts = alerts;
+            _availableServices = serviceNames;
+            _isLoading = false;
+          });
+        }
       }
-
-      setState(() => _isLoading = false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = e.toString().replaceFirst('Exception: ', '');
       });
+    }
+  }
+
+  /// Derive synthetic alerts from monitoring dashboard data as a fallback.
+  Future<void> _loadAlertsFromMonitoring(
+    String wsId,
+    List<_AlertData> alerts,
+    Set<String> serviceNames,
+  ) async {
+    try {
+      final dashboard = await ApiService().getMonitoringDashboard(wsId);
+      final services =
+          (dashboard['services'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+      for (final svc in services) {
+        final name = (svc['name'] ?? 'Unknown') as String;
+        serviceNames.add(name);
+        final status = (svc['status'] ?? 'healthy') as String;
+        if (status != 'healthy') {
+          alerts.add(_AlertData(
+            status == 'degraded' ? 'Latency' : 'Error',
+            name,
+            'Now',
+            status == 'degraded' ? 'Medium' : 'Critical',
+          ));
+        }
+      }
+      final errorRate = ((dashboard['error_rate'] ?? 0) as num).toDouble();
+      if (errorRate > 5) {
+        alerts.insert(0,
+            _AlertData('Error', 'Platform',
+                'Error rate: ${errorRate.toStringAsFixed(1)}%', 'Critical'));
+      } else if (errorRate > 1) {
+        alerts.insert(0,
+            _AlertData('Error', 'Platform',
+                'Error rate: ${errorRate.toStringAsFixed(1)}%', 'High'));
+      }
+    } catch (_) {
+      // No monitoring data available either — show empty
     }
   }
 

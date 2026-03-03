@@ -10,13 +10,15 @@ import (
 
 // User represents a user account
 type User struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
-	Password  string         `gorm:"not null" json:"-"`
-	Name      string         `gorm:"not null" json:"name"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                  uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	Email               string         `gorm:"uniqueIndex;not null" json:"email"`
+	Password            string         `gorm:"not null" json:"-"`
+	Name                string         `gorm:"not null" json:"name"`
+	AuthProvider        string         `gorm:"default:'local'" json:"auth_provider"` // local, google, github
+	SelectedEnvironment string         `gorm:"default:'production'" json:"selected_environment"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Workspace represents a workspace
@@ -276,4 +278,47 @@ type EnvironmentSecret struct {
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
 
 	Environment Environment `gorm:"foreignKey:EnvironmentID"`
+}
+
+// TestRun represents a persisted HTTP test request and its result
+type TestRun struct {
+	ID             uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UserID         uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	User           User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Method         string         `gorm:"not null" json:"method"`
+	URL            string         `gorm:"not null" json:"url"`
+	Headers        string         `gorm:"type:jsonb" json:"headers"`
+	Body           string         `gorm:"type:text" json:"body"`
+	StatusCode     int            `json:"status_code"`
+	ResponseTimeMs int64          `json:"response_time_ms"`
+	ResponseBody   string         `gorm:"type:text" json:"response_body"`
+	Passed         bool           `gorm:"default:true" json:"passed"`
+	ErrorMessage   string         `json:"error_message,omitempty"`
+	Environment    string         `gorm:"default:'production'" json:"environment"`
+	CreatedAt      time.Time      `json:"created_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// UserLog represents a structured log entry for a user
+type UserLog struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	User      User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Level     string         `gorm:"not null;default:'INFO'" json:"level"` // INFO, WARN, ERROR
+	Message   string         `gorm:"type:text;not null" json:"message"`
+	Metadata  string         `gorm:"type:jsonb" json:"metadata,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// DeviceToken stores FCM tokens for push notifications
+type DeviceToken struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	User      User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Token     string         `gorm:"uniqueIndex;not null" json:"token"`
+	Platform  string         `gorm:"not null" json:"platform"` // android, ios, web
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }

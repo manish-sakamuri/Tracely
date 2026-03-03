@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tracely/services/api_service.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -9,13 +10,41 @@ class LogsScreen extends StatefulWidget {
 
 class _LogsScreenState extends State<LogsScreen> {
   String _severityFilter = 'All';
+  List<dynamic> _logs = [];
+  bool _isLoading = true;
+  String? _error;
 
-  static final _logs = [
-    _LogEntry('INFO', '2024-02-08 10:23:45', 'Request received: GET /api/users'),
-    _LogEntry('WARN', '2024-02-08 10:23:44', 'Cache miss for key: user:123'),
-    _LogEntry('ERROR', '2024-02-08 10:23:42', 'Database connection timeout'),
-    _LogEntry('INFO', '2024-02-08 10:23:40', 'Server started on port 8080'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchLogs();
+  }
+
+  Future<void> _fetchLogs() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await ApiService().getUserLogs(
+        level: _severityFilter == 'All' ? null : _severityFilter,
+      );
+      if (mounted) {
+        setState(() {
+          _logs = (data['logs'] ?? []) as List<dynamic>;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceFirst('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +56,10 @@ class _LogsScreenState extends State<LogsScreen> {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
-            onSelected: (v) => setState(() => _severityFilter = v),
+            onSelected: (v) {
+              setState(() => _severityFilter = v);
+              _fetchLogs();
+            },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'All', child: Text('All')),
               const PopupMenuItem(value: 'INFO', child: Text('INFO')),
@@ -37,37 +69,62 @@ class _LogsScreenState extends State<LogsScreen> {
           ),
         ],
       ),
-      body: Builder(
-        builder: (context) {
-          final filtered = _logs.where((l) => _severityFilter == 'All' || l.severity == _severityFilter).toList();
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: filtered.length,
-            itemBuilder: (context, i) => _LogItem(entry: filtered[i]),
-          );
-        },
+      body: RefreshIndicator(
+        onRefresh: _fetchLogs,
+        child: _buildBody(theme),
       ),
+    );
+  }
+
+  Widget _buildBody(ThemeData theme) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _fetchLogs, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    if (_logs.isEmpty) {
+      return const Center(child: Text('No logs found'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _logs.length,
+      itemBuilder: (context, i) {
+        final log = _logs[i] as Map<String, dynamic>;
+        return _LogItem(
+          severity: (log['level'] ?? 'INFO') as String,
+          timestamp: (log['created_at'] ?? '') as String,
+          message: (log['message'] ?? '') as String,
+        );
+      },
     );
   }
 }
 
-class _LogEntry {
+class _LogItem extends StatelessWidget {
   final String severity;
   final String timestamp;
   final String message;
 
-  _LogEntry(this.severity, this.timestamp, this.message);
-}
-
-class _LogItem extends StatelessWidget {
-  final _LogEntry entry;
-
-  const _LogItem({required this.entry});
+  const _LogItem({
+    required this.severity,
+    required this.timestamp,
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = switch (entry.severity) {
+    final color = switch (severity) {
       'ERROR' => Colors.red,
       'WARN' => Colors.amber,
       _ => Colors.blue,
@@ -87,7 +144,7 @@ class _LogItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                entry.severity,
+                severity,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
@@ -101,13 +158,13 @@ class _LogItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.timestamp,
+                    timestamp,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.6),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(entry.message, style: theme.textTheme.bodyMedium),
+                  Text(message, style: theme.textTheme.bodyMedium),
                 ],
               ),
             ),

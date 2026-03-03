@@ -1,9 +1,9 @@
 package services
 
 import (
+	"backend/models"
 	"errors"
 	"time"
-	"backend/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,13 +15,13 @@ type MonitoringService struct {
 }
 
 type DashboardData struct {
-	TotalRequests      int64                  `json:"total_requests"`
-	SuccessfulRequests int64                  `json:"successful_requests"`
-	FailedRequests     int64                  `json:"failed_requests"`
-	AvgResponseTimeMs  float64                `json:"avg_response_time_ms"`
-	P95ResponseTimeMs  float64                `json:"p95_response_time_ms"`
-	P99ResponseTimeMs  float64                `json:"p99_response_time_ms"`
-	ErrorRate          float64                `json:"error_rate"`
+	TotalRequests      int64                    `json:"total_requests"`
+	SuccessfulRequests int64                    `json:"successful_requests"`
+	FailedRequests     int64                    `json:"failed_requests"`
+	AvgResponseTimeMs  float64                  `json:"avg_response_time_ms"`
+	P95ResponseTimeMs  float64                  `json:"p95_response_time_ms"`
+	P99ResponseTimeMs  float64                  `json:"p99_response_time_ms"`
+	ErrorRate          float64                  `json:"error_rate"`
 	TopEndpoints       []map[string]interface{} `json:"top_endpoints"`
 	Services           []map[string]interface{} `json:"services"`
 }
@@ -58,59 +58,86 @@ func (s *MonitoringService) GetDashboard(workspaceID, userID uuid.UUID, timeRang
 		Services:     []map[string]interface{}{},
 	}
 
-	// Get total requests
+	// ── Aggregate from Execution table ──
 	s.db.Model(&models.Execution{}).
 		Where("timestamp >= ?", startTime).
 		Count(&dashboard.TotalRequests)
 
-	// Get successful requests
 	s.db.Model(&models.Execution{}).
 		Where("timestamp >= ? AND status_code >= 200 AND status_code < 400", startTime).
 		Count(&dashboard.SuccessfulRequests)
 
-	dashboard.FailedRequests = dashboard.TotalRequests - dashboard.SuccessfulRequests
-
-	if dashboard.TotalRequests > 0 {
-		dashboard.ErrorRate = float64(dashboard.FailedRequests) / float64(dashboard.TotalRequests) * 100
-	}
-
-	// Get average response time
 	var avgTime *float64
 	s.db.Model(&models.Execution{}).
 		Where("timestamp >= ?", startTime).
 		Select("AVG(response_time_ms)").
 		Row().Scan(&avgTime)
-	
 	if avgTime != nil {
 		dashboard.AvgResponseTimeMs = *avgTime
 	}
 
-	// Get percentiles (simplified - should use proper percentile calculation)
-	type PercentileResult struct {
-		P95 float64
-		P99 float64
+	// ── If no Execution data, fall back to TestRun table ──
+	// The Tests screen saves requests to TestRun, so we need this fallback.
+	if dashboard.TotalRequests == 0 {
+		var trTotal int64
+		s.db.Model(&models.TestRun{}).
+			Where("created_at >= ?", startTime).
+			Count(&trTotal)
+		dashboard.TotalRequests = trTotal
+
+		if trTotal > 0 {
+			var trSuccess int64
+			s.db.Model(&models.TestRun{}).
+				Where("created_at >= ? AND status_code >= 200 AND status_code < 400", startTime).
+				Count(&trSuccess)
+			dashboard.SuccessfulRequests = trSuccess
+
+			var trAvg *float64
+			s.db.Model(&models.TestRun{}).
+				Where("created_at >= ?", startTime).
+				Select("AVG(response_time_ms)").
+				Row().Scan(&trAvg)
+			if trAvg != nil {
+				dashboard.AvgResponseTimeMs = *trAvg
+			}
+		}
 	}
 
-	// Get services
+	dashboard.FailedRequests = dashboard.TotalRequests - dashboard.SuccessfulRequests
+	if dashboard.TotalRequests > 0 {
+		dashboard.ErrorRate = float64(dashboard.FailedRequests) / float64(dashboard.TotalRequests) * 100
+	}
+
+	// ── Get services from Trace table ──
 	var traces []models.Trace
 	s.db.Where("workspace_id = ? AND start_time >= ?", workspaceID, startTime).
 		Group("service_name").
 		Find(&traces)
 
 	for _, trace := range traces {
-		serviceData := map[string]interface{}{
-			"name":          trace.ServiceName,
-			"status":        "healthy",
-			"request_count": 0,
-		}
-
 		var count int64
 		s.db.Model(&models.Trace{}).
 			Where("workspace_id = ? AND service_name = ? AND start_time >= ?", workspaceID, trace.ServiceName, startTime).
 			Count(&count)
-		
-		serviceData["request_count"] = count
-		dashboard.Services = append(dashboard.Services, serviceData)
+
+		status := "healthy"
+		// Check if this service has recent errors
+		var errCount int64
+		s.db.Model(&models.Trace{}).
+			Where("workspace_id = ? AND service_name = ? AND start_time >= ? AND status = 'error'", workspaceID, trace.ServiceName, startTime).
+			Count(&errCount)
+		if count > 0 && float64(errCount)/float64(count) > 0.3 {
+			status = "degraded"
+		}
+		if count > 0 && float64(errCount)/float64(count) > 0.6 {
+			status = "unhealthy"
+		}
+
+		dashboard.Services = append(dashboard.Services, map[string]interface{}{
+			"name":          trace.ServiceName,
+			"status":        status,
+			"request_count": count,
+		})
 	}
 
 	return dashboard, nil
@@ -134,7 +161,7 @@ func (s *MonitoringService) GetTopology(workspaceID, userID uuid.UUID) (map[stri
 
 	for _, span := range spans {
 		services[span.ServiceName] = true
-		
+
 		if span.ParentSpanID != nil {
 			var parentSpan models.Span
 			if err := s.db.First(&parentSpan, span.ParentSpanID).Error; err == nil {

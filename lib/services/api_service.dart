@@ -113,6 +113,10 @@ class ApiService {
       final error = json.decode(response.body);
       throw Exception(
           error['error'] ?? error['message'] ?? 'Request failed (${response.statusCode})');
+    } on FormatException {
+      // Backend returned non-JSON (e.g. HTML 404 page)
+      debugPrint('[ApiService] Non-JSON error response (${response.statusCode}): ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
+      throw Exception('Server error (${response.statusCode}). Please try again later.');
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception('Request failed: ${response.statusCode}');
@@ -171,6 +175,18 @@ class ApiService {
   Future<Map<String, dynamic>> _delete(String path) async {
     final response = await _executeWithRetry(
       () => http.delete(Uri.parse('$baseUrl$path'), headers: _headers()),
+    );
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _patch(String path,
+      {Map<String, dynamic>? body}) async {
+    final response = await _executeWithRetry(
+      () => http.patch(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers(),
+        body: body != null ? json.encode(body) : null,
+      ),
     );
     return _handleResponse(response);
   }
@@ -344,5 +360,166 @@ class ApiService {
   Future<Map<String, dynamic>> updateUserSettings(
       Map<String, dynamic> settings) async {
     return _put('/users/settings', body: settings);
+  }
+
+  // ─── OAuth Authentication ─────────────────────────────────
+
+  /// Authenticate with Google using the ID token from Google Sign-In.
+  /// The backend verifies the token with Google's API and returns JWT tokens.
+  Future<Map<String, dynamic>> googleAuth(String idToken) async {
+    final data = await _post(
+      '/auth/google',
+      body: {'id_token': idToken},
+      auth: false,
+    );
+    final access = data['access_token'] as String?;
+    final refresh = data['refresh_token'] as String?;
+    if (access != null && refresh != null) {
+      await saveTokens(access, refresh);
+    }
+    return data;
+  }
+
+  /// Authenticate with GitHub using the authorization code from OAuth redirect.
+  /// The backend exchanges the code for an access token and returns JWT tokens.
+  Future<Map<String, dynamic>> githubAuth(String code, {String? state}) async {
+    final body = <String, dynamic>{'code': code};
+    if (state != null) body['state'] = state;
+    final data = await _post('/auth/github', body: body, auth: false);
+    final access = data['access_token'] as String?;
+    final refresh = data['refresh_token'] as String?;
+    if (access != null && refresh != null) {
+      await saveTokens(access, refresh);
+    }
+    return data;
+  }
+
+  // ─── User Profile ─────────────────────────────────────────
+
+  /// Get the authenticated user's profile information.
+  Future<Map<String, dynamic>> getMe() async {
+    return _get('/users/me');
+  }
+
+  /// Get the authenticated user's audit/activity logs.
+  Future<Map<String, dynamic>> getUserLogs({
+    String? level,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var path = '/users/logs?limit=$limit&offset=$offset';
+    if (level != null && level.isNotEmpty && level != 'All') {
+      path += '&level=$level';
+    }
+    return _get(path);
+  }
+
+  /// Update the user's selected environment preference.
+  Future<Map<String, dynamic>> updateEnvironment(String environment) async {
+    return _put('/users/environment', body: {'environment': environment});
+  }
+
+  // ─── Test Runs ─────────────────────────────────────────────
+
+  /// Save a test run to the backend (called after executing a request in the Tests screen).
+  Future<Map<String, dynamic>> createTestRun({
+    required String method,
+    required String url,
+    required int statusCode,
+    String? requestBody,
+    String? responseBody,
+    int? responseTimeMs,
+    String environment = 'production',
+  }) async {
+    return _post('/test-runs', body: {
+      'method': method,
+      'url': url,
+      'status_code': statusCode,
+      'headers': '{}',
+      'body': requestBody ?? '',
+      'response_body': responseBody ?? '',
+      'response_time_ms': responseTimeMs ?? 0,
+      'environment': environment,
+    });
+  }
+
+  /// Get all test runs for the authenticated user.
+  Future<Map<String, dynamic>> getTestRuns({
+    String? environment,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var path = '/test-runs?limit=$limit&offset=$offset';
+    if (environment != null && environment.isNotEmpty) {
+      path += '&environment=$environment';
+    }
+    return _get(path);
+  }
+
+  /// Delete a test run by ID.
+  Future<Map<String, dynamic>> deleteTestRun(String id) async {
+    return _delete('/test-runs/$id');
+  }
+
+  // ─── Alerts ────────────────────────────────────────────────
+
+  /// Get all alerts for a workspace with optional severity filter and pagination.
+  Future<Map<String, dynamic>> getAlerts(String workspaceId, {
+    String? severity,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var path = '/workspaces/$workspaceId/alerts?limit=$limit&offset=$offset';
+    if (severity != null && severity.isNotEmpty && severity != 'All') {
+      path += '&severity=$severity';
+    }
+    return _get(path);
+  }
+
+  /// Get only active alerts for a workspace.
+  Future<Map<String, dynamic>> getActiveAlerts(String workspaceId) async {
+    return _get('/workspaces/$workspaceId/alerts/active');
+  }
+
+  /// Create a new alert rule for a workspace.
+  Future<Map<String, dynamic>> createAlertRule(
+    String workspaceId, {
+    required String name,
+    required String condition,
+    required double threshold,
+    required int timeWindow,
+    required String channel,
+  }) async {
+    return _post('/workspaces/$workspaceId/alerts/rules', body: {
+      'name': name,
+      'condition': condition,
+      'threshold': threshold,
+      'time_window': timeWindow,
+      'channel': channel,
+    });
+  }
+
+  /// Acknowledge an alert.
+  Future<Map<String, dynamic>> acknowledgeAlert(
+      String workspaceId, String alertId) async {
+    return _post('/workspaces/$workspaceId/alerts/$alertId/acknowledge');
+  }
+
+  // ─── Notifications ──────────────────────────────────────────
+
+  /// Send a test notification to verify notification delivery.
+  Future<Map<String, dynamic>> sendTestNotification() async {
+    return _post('/notifications/test');
+  }
+
+  /// Register a device token for push notifications.
+  Future<Map<String, dynamic>> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    return _post('/notifications/device-token', body: {
+      'token': token,
+      'platform': platform,
+    });
   }
 }

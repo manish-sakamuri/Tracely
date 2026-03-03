@@ -9,16 +9,20 @@ import (
 )
 
 type Config struct {
-	Environment       string
-	Port              string
-	DatabaseURL       string
-	JWTSecret         string
-	JWTExpiration     string
-	RefreshExpiration string
-	CORSOrigins       []string
-	LogLevel          string
-	TraceStorageDir   string
-	MaxReplayWorkers  int
+	Environment        string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          string
+	JWTExpiration      string
+	RefreshExpiration  string
+	CORSOrigins        []string
+	LogLevel           string
+	TraceStorageDir    string
+	MaxReplayWorkers   int
+	GoogleClientID     string
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubOAuthState   string // CSRF protection for GitHub OAuth
 }
 
 func Load() *Config {
@@ -26,16 +30,20 @@ func Load() *Config {
 	_ = godotenv.Load()
 
 	config := &Config{
-		Environment:       getEnv("ENVIRONMENT", "development"),
-		Port:              getEnv("PORT", "8081"),
-		DatabaseURL:       getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tracely_dev?sslmode=disable"),
-		JWTSecret:         getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		JWTExpiration:     getEnv("JWT_EXPIRATION", "1h"),
-		RefreshExpiration: getEnv("REFRESH_EXPIRATION", "720h"), // 30 days
-		CORSOrigins:       strings.Split(getEnv("CORS_ORIGINS", "http://localhost"), ","),
-		LogLevel:          getEnv("LOG_LEVEL", "info"),
-		TraceStorageDir:   getEnv("TRACE_STORAGE_DIR", "./traces"),
-		MaxReplayWorkers:  10,
+		Environment:        getEnv("ENVIRONMENT", "development"),
+		Port:               getEnv("PORT", "8081"),
+		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tracely_dev?sslmode=disable"),
+		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+		JWTExpiration:      getEnv("JWT_EXPIRATION", "1h"),
+		RefreshExpiration:  getEnv("REFRESH_EXPIRATION", "720h"), // 30 days
+		CORSOrigins:        strings.Split(getEnv("CORS_ORIGINS", "http://localhost"), ","),
+		LogLevel:           getEnv("LOG_LEVEL", "info"),
+		TraceStorageDir:    getEnv("TRACE_STORAGE_DIR", "./traces"),
+		MaxReplayWorkers:   10,
+		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubOAuthState:   getEnv("GITHUB_OAUTH_STATE", "tracely-csrf-state"),
 	}
 
 	// Validate required fields

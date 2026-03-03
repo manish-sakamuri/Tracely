@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -49,9 +50,12 @@ func main() {
 	replayService := services.NewReplayService(db)
 	mockService := services.NewMockService(db)
 	environmentService := services.NewEnvironmentService(db)
+	alertingService := services.NewAlertingService(db)
+	testRunService := services.NewTestRunService(db)
+	userLogService := services.NewUserLogService(db)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService)
+	authHandler := handlers.NewAuthHandler(authService, cfg)
 	workspaceHandler := handlers.NewWorkspaceHandler(workspaceService)
 	collectionHandler := handlers.NewCollectionHandler(collectionService)
 	requestHandler := handlers.NewRequestHandler(requestService)
@@ -62,11 +66,16 @@ func main() {
 	replayHandler := handlers.NewReplayHandler(replayService)
 	mockHandler := handlers.NewMockHandler(mockService)
 	environmentHandler := handlers.NewEnvironmentHandler(environmentService)
+	alertHandler := handlers.NewAlertHandler(alertingService)
+	testRunHandler := handlers.NewTestRunHandler(testRunService, userLogService)
+	userHandler := handlers.NewUserHandler(db, userLogService)
+	notificationHandler := handlers.NewNotificationHandler(db, userLogService)
 
 	// Setup router
-	router := setupRouter(cfg, authService, authHandler, workspaceHandler, collectionHandler,
+	router := setupRouter(cfg, db, authService, authHandler, workspaceHandler, collectionHandler,
 		requestHandler, traceHandler, monitoringHandler, governanceHandler, settingsHandler,
-		replayHandler, mockHandler, environmentHandler)
+		replayHandler, mockHandler, environmentHandler, alertHandler, testRunHandler, userHandler,
+		notificationHandler)
 
 	// Create server
 	srv := &http.Server{
@@ -101,7 +110,7 @@ func main() {
 	log.Println("Server exited")
 }
 
-func setupRouter(cfg *config.Config, authService *services.AuthService,
+func setupRouter(cfg *config.Config, db *gorm.DB, authService *services.AuthService,
 	authHandler *handlers.AuthHandler,
 	workspaceHandler *handlers.WorkspaceHandler,
 	collectionHandler *handlers.CollectionHandler,
@@ -112,7 +121,11 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 	settingsHandler *handlers.SettingsHandler,
 	replayHandler *handlers.ReplayHandler,
 	mockHandler *handlers.MockHandler,
-	environmentHandler *handlers.EnvironmentHandler) *gin.Engine {
+	environmentHandler *handlers.EnvironmentHandler,
+	alertHandler *handlers.AlertHandler,
+	testRunHandler *handlers.TestRunHandler,
+	userHandler *handlers.UserHandler,
+	notificationHandler *handlers.NotificationHandler) *gin.Engine {
 
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -143,6 +156,15 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 	router.Use(middlewares.ErrorHandler())
 	router.Use(middlewares.TraceID())
 
+	// NoRoute handler – returns JSON 404 instead of Gin's default HTML page
+	router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":  "Route not found",
+			"method": c.Request.Method,
+			"path":   c.Request.URL.Path,
+		})
+	})
+
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
@@ -159,11 +181,15 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", middlewares.AuthMiddleware(authService), authHandler.Logout)
 			auth.POST("/verify", middlewares.AuthMiddleware(authService), authHandler.VerifyToken)
+			auth.POST("/google", authHandler.GoogleAuth)
+			auth.POST("/github", authHandler.GitHubAuth)
+			auth.GET("/github/callback", authHandler.GitHubCallback)
 		}
 
 		// Protected routes
 		protected := v1.Group("")
 		protected.Use(middlewares.AuthMiddleware(authService))
+		protected.Use(middlewares.TraceRecorder(db))
 		{
 			// Workspace routes
 			workspaces := protected.Group("/workspaces")
@@ -232,7 +258,39 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 			// User settings routes
 			protected.GET("/users/settings", settingsHandler.GetSettings)
 			protected.PUT("/users/settings", settingsHandler.UpdateSettings)
+
+			// User profile routes
+			protected.GET("/users/me", userHandler.GetMe)
+			protected.GET("/users/logs", userHandler.GetLogs)
+			protected.PUT("/users/environment", userHandler.UpdateEnvironment)
+
+			// Test run routes
+			testRuns := protected.Group("/test-runs")
+			{
+				testRuns.POST("", testRunHandler.CreateTestRun)
+				testRuns.GET("", testRunHandler.GetTestRuns)
+				testRuns.DELETE("/:id", testRunHandler.DeleteTestRun)
+			}
+
+			// Notification routes
+			notifications := protected.Group("/notifications")
+			{
+				notifications.POST("/test", notificationHandler.TestNotification)
+				notifications.POST("/device-token", notificationHandler.RegisterDeviceToken)
+			}
+
+			// Alert routes (workspace-scoped)
+			workspaces.POST("/:workspace_id/alerts/rules", alertHandler.CreateRule)
+			workspaces.GET("/:workspace_id/alerts/active", alertHandler.GetActiveAlerts)
+			workspaces.GET("/:workspace_id/alerts", alertHandler.GetAllAlerts)
+			workspaces.POST("/:workspace_id/alerts/:alert_id/acknowledge", alertHandler.AcknowledgeAlert)
 		}
+	}
+
+	// Print all registered routes on startup for debugging
+	log.Println("Registered routes:")
+	for _, route := range router.Routes() {
+		log.Printf("  %s %s", route.Method, route.Path)
 	}
 
 	return router

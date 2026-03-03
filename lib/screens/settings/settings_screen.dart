@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tracely/core/providers/auth_provider.dart';
@@ -29,9 +30,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final data = await ApiService().getUserSettings();
       if (!mounted) return;
+
+      String email = data['email'] ?? '';
+      String accountId = data['user_id'] ?? data['id'] ?? '';
+
+      // Fallback: if settings didn't return email/id, fetch from /users/me
+      if (email.isEmpty || accountId.isEmpty) {
+        try {
+          final me = await ApiService().getMe();
+          if (email.isEmpty) email = me['email'] ?? 'user@example.com';
+          if (accountId.isEmpty) accountId = me['id']?.toString() ?? '';
+        } catch (e) {
+          debugPrint('[Settings] getMe fallback failed: $e');
+        }
+      }
+
       setState(() {
-        _email = data['email'] ?? 'user@example.com';
-        _accountId = data['user_id'] ?? data['id'] ?? '';
+        _email = email.isNotEmpty ? email : 'user@example.com';
+        _accountId = accountId;
         _notificationsEnabled = data['notifications_enabled'] ?? true;
 
         // Sync theme from server if present
@@ -47,9 +63,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Settings] Failed to load settings: $e');
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _email = 'Failed to load';
+        _isLoading = false;
+      });
     }
   }
 
@@ -58,7 +78,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await ApiService()
           .updateUserSettings({'notifications_enabled': value});
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Settings] Failed to save notification pref: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: ${e.toString().replaceFirst("Exception: ", "")}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendTestNotification() async {
+    try {
+      await ApiService().sendTestNotification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Test notification sent!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Settings] Test notification failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Notification failed: ${e.toString().replaceFirst("Exception: ", "")}')),
+        );
+      }
+    }
   }
 
   @override
@@ -106,6 +151,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _notificationsEnabled,
                       onChanged: _saveNotifications,
                     ),
+                  ),
+                  _SettingsTile(
+                    icon: Icons.send_rounded,
+                    title: 'Send Test Notification',
+                    subtitle: 'Verify notification delivery',
+                    onTap: _sendTestNotification,
                   ),
                 ],
               ),

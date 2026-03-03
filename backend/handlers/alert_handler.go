@@ -4,6 +4,7 @@ import (
 	"backend/middlewares"
 	"backend/services"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -58,6 +59,39 @@ func (h *AlertHandler) GetActiveAlerts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"alerts": alerts})
+}
+
+// GetAllAlerts returns all alerts for a workspace with optional severity
+// filtering and pagination. Used by the Alerts screen on the frontend.
+func (h *AlertHandler) GetAllAlerts(c *gin.Context) {
+	workspaceID, _ := uuid.Parse(c.Param("workspace_id"))
+
+	severity := c.Query("severity")
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	alerts, total, err := h.alertingService.GetAllAlerts(workspaceID, severity, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"alerts": alerts,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 func (h *AlertHandler) AcknowledgeAlert(c *gin.Context) {
