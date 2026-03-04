@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -272,8 +273,10 @@ func (s *RequestService) QuickExecute(
 
 	// Verify user has access to the workspace
 	if !s.workspaceService.HasAccess(workspaceID, userID) {
+		log.Printf("[DEBUG] QuickExecute: Access denied for WorkspaceID=%s, UserID=%s", workspaceID, userID)
 		return nil, errors.New("access denied")
 	}
+	log.Printf("[DEBUG] QuickExecute: Starting for %s %s", method, url)
 
 	startTime := time.Now()
 	traceID := uuid.New()
@@ -350,7 +353,9 @@ func (s *RequestService) QuickExecute(
 		Status:          status,
 	}
 
+	log.Printf("[DEBUG] QuickExecute: Creating Trace ID=%s", traceID)
 	if err := s.db.Create(&trace).Error; err != nil {
+		log.Printf("[ERROR] QuickExecute: Failed to create Trace: %v", err)
 		return nil, err
 	}
 
@@ -363,6 +368,7 @@ func (s *RequestService) QuickExecute(
 		StartTime:     startTime,
 		DurationMs:    float64(responseTime),
 		Status:        "ok",
+		Logs:          "[]", // Valid empty JSON array for logs
 	}
 
 	tagsData := map[string]interface{}{
@@ -375,9 +381,12 @@ func (s *RequestService) QuickExecute(
 	tagsJSON, _ := json.Marshal(tagsData)
 	span.Tags = string(tagsJSON)
 
+	log.Printf("[DEBUG] QuickExecute: Creating Span ID=%s", spanID)
 	if err := s.db.Create(&span).Error; err != nil {
+		log.Printf("[ERROR] QuickExecute: Failed to create Span: %v", err)
 		return nil, err
 	}
+	log.Printf("[DEBUG] QuickExecute: Successfully completed")
 
 	return &execution, nil
 }

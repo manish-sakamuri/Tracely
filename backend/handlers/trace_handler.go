@@ -67,10 +67,8 @@ func (h *TraceHandler) GetTraceDetails(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"trace_id": trace.ID,
-		"spans":    spans,
-	})
+	trace.Spans = spans
+	c.JSON(http.StatusOK, trace)
 }
 
 type AddAnnotationRequest struct {
