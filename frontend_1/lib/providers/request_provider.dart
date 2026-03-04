@@ -68,7 +68,7 @@ class RequestProvider extends ChangeNotifier {
       } 
       // MODE B: Quick Trace Execution (ad-hoc tracing)
       else if (workspaceId != null && _tracingEnabled) {
-        responseInfo = await _apiService.quickExecuteRequest(
+        final rawResponse = await _apiService.quickExecuteRequest(
           workspaceId,
           {
             'method': method,
@@ -77,6 +77,34 @@ class RequestProvider extends ChangeNotifier {
             'body': body,
           },
         );
+
+        // Normalize backend Execution model keys to frontend expected keys
+        Map<String, String> responseHeaders = {};
+        if (rawResponse['response_headers'] != null) {
+          try {
+            final decodedHeaders = json.decode(rawResponse['response_headers']);
+            if (decodedHeaders is Map) {
+              decodedHeaders.forEach((k, v) {
+                if (v is List && v.isNotEmpty) {
+                  responseHeaders[k.toString()] = v[0].toString();
+                } else {
+                  responseHeaders[k.toString()] = v.toString();
+                }
+              });
+            }
+          } catch (e) {
+            debugPrint('Error decoding response headers: $e');
+          }
+        }
+
+        responseInfo = {
+          'status': rawResponse['status_code'] ?? 200,
+          'body': rawResponse['response_body'],
+          'headers': responseHeaders,
+          'duration_ms': rawResponse['response_time_ms'] ?? 0,
+          'trace_id': rawResponse['trace_id'],
+          'time': DateTime.now().toIso8601String(),
+        };
       }
       // MODE C: Direct Execution (local HTTP)
       else {

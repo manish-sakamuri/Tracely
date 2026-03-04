@@ -301,17 +301,18 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
     
     // First, try to find protocol information from environment or tags
     for (var span in spans) {
-      final tags = span['tags'] ?? span['attributes'] ?? {};
+      final rawTags = span['tags'] ?? span['attributes'];
+      final Map<String, dynamic> tags = rawTags is Map ? Map<String, dynamic>.from(rawTags) : {};
       
       // Check for protocol in tags
       if (tags['http.scheme'] != null) {
-        protocol = tags['http.scheme'];
+        protocol = tags['http.scheme'].toString();
         break;
       }
       
       // Check for URL scheme
-      final urlStr = tags['http.url'] ?? tags['url'] ?? '';
-      if (urlStr.toString().startsWith('http://')) {
+      final urlStr = (tags['http.url'] ?? tags['url'] ?? '').toString();
+      if (urlStr.startsWith('http://')) {
         protocol = 'http';
         break;
       }
@@ -320,7 +321,8 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
     // Look for HTTP-related spans
     for (var span in spans) {
       final spanName = (span['name'] ?? '').toString().toLowerCase();
-      final tags = span['tags'] ?? span['attributes'] ?? {};
+      final rawTags = span['tags'] ?? span['attributes'];
+      final Map<String, dynamic> tags = rawTags is Map ? Map<String, dynamic>.from(rawTags) : {};
       
       // Check if this span contains HTTP request info
       if (spanName.contains('http') || 
@@ -330,17 +332,17 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
           tags.containsKey('http.url')) {
         
         // Extract method
-        method = tags['http.method'] ?? 
+        method = (tags['http.method'] ?? 
                 tags['method'] ?? 
                 tags['http.request.method'] ?? 
-                method;
+                method).toString();
         
         // Extract URL with proper protocol handling
-        String rawUrl = tags['http.url'] ?? 
+        String rawUrl = (tags['http.url'] ?? 
                        tags['url'] ?? 
                        tags['http.target'] ?? 
                        tags['http.request.uri'] ?? 
-                       '';
+                       '').toString();
         
         if (rawUrl.isNotEmpty) {
           // If URL doesn't have protocol, add the detected protocol
@@ -350,11 +352,11 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
               url = '$protocol:$rawUrl';
             } else if (rawUrl.startsWith('/')) {
               // Need to construct from service name
-              final service = span['service'] ?? trace['service'] ?? '';
-              if (service.isNotEmpty) {
+              final service = (span['service'] ?? trace['service'] ?? '').toString();
+              if (service.isNotEmpty && service != 'Unknown') {
                 url = '$protocol://$service$rawUrl';
               } else {
-                url = '$protocol://unknown$rawUrl';
+                url = '$protocol://localhost:8081$rawUrl'; // Fallback to local
               }
             } else {
               url = '$protocol://$rawUrl';
@@ -365,21 +367,23 @@ class _TracesScreenState extends State<TracesScreen> with WidgetsBindingObserver
         }
         
         // Extract headers
-        if (tags['http.request.headers'] != null) {
-          headers = Map<String, String>.from(tags['http.request.headers']);
-        } else if (tags['headers'] != null) {
-          headers = Map<String, String>.from(tags['headers']);
-        }
+        try {
+          if (tags['http.request.headers'] is Map) {
+            headers = Map<String, String>.from(tags['http.request.headers']);
+          } else if (tags['headers'] is Map) {
+            headers = Map<String, String>.from(tags['headers']);
+          }
+        } catch (_) {}
         
         // Extract request body
-        body = tags['http.request.body'] ?? 
+        body = (tags['http.request.body'] ?? 
                tags['request.body'] ?? 
                tags['body'] ?? 
                tags['http.request.body.text'] ??
-               '';
+               '').toString();
         
         // If we found a valid URL, break
-        if (url.isNotEmpty && url != '$protocol://unknown/') {
+        if (url.isNotEmpty && !url.contains('unknown')) {
           break;
         }
       }
@@ -1452,7 +1456,15 @@ class TraceDetailScreen extends StatelessWidget {
     final spans = trace['spans'] as List? ?? [];
     if (spans.isEmpty) return const SizedBox();
 
-    final totalDuration = trace['duration'] ?? 1;
+    // Normalize total duration
+    double totalDur = 1.0;
+    final rawTotalDur = trace['duration'];
+    if (rawTotalDur is num) {
+      totalDur = rawTotalDur.toDouble();
+    } else if (rawTotalDur is String) {
+      totalDur = double.tryParse(rawTotalDur) ?? 1.0;
+    }
+    if (totalDur <= 0) totalDur = 1.0;
     
     return Card(
       elevation: 0,
@@ -1503,7 +1515,7 @@ class TraceDetailScreen extends StatelessWidget {
                           // Time labels
                           ...List.generate(5, (i) {
                             final position = (constraints.maxWidth * (i / 4)) - 20;
-                            final timeMs = (totalDuration * (i / 4)).round();
+                            final timeMs = (totalDur * (i / 4)).round();
                             return Positioned(
                               left: position,
                               top: 10,
@@ -1527,10 +1539,39 @@ class TraceDetailScreen extends StatelessWidget {
             
             // Spans timeline
             ...spans.mapIndexed((index, span) {
-              final spanStart = span['start_time'] ?? 0;
-              final spanDuration = span['duration'] ?? 0;
-              final startPercent = (spanStart / totalDuration).clamp(0.0, 1.0);
-              final widthPercent = (spanDuration / totalDuration).clamp(0.0, 1.0);
+              // Normalize span start
+              double spanStartMs = 0;
+              final rawStart = span['start_time'];
+              if (rawStart is num) {
+                spanStartMs = rawStart.toDouble();
+              } else if (rawStart is String) {
+                try {
+                  final spanDt = DateTime.parse(rawStart);
+                  final traceDt = DateTime.parse(trace['timestamp'] ?? rawStart);
+                  // Use absolute difference if it seems like a timestamp, 
+                  // or try parsing as double if it's a numeric string
+                  final parsedDouble = double.tryParse(rawStart);
+                  if (parsedDouble != null) {
+                    spanStartMs = parsedDouble;
+                  } else {
+                    spanStartMs = spanDt.difference(traceDt).inMilliseconds.abs().toDouble();
+                  }
+                } catch (_) {
+                  spanStartMs = 0;
+                }
+              }
+
+              // Normalize span duration
+              double spanDurMs = 0;
+              final rawDur = span['duration'];
+              if (rawDur is num) {
+                spanDurMs = rawDur.toDouble();
+              } else if (rawDur is String) {
+                spanDurMs = double.tryParse(rawDur) ?? 0;
+              }
+
+              final startPercent = (spanStartMs / totalDur).clamp(0.0, 1.0);
+              final widthPercent = (spanDurMs / totalDur).clamp(0.0, 1.0);
               
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -1592,7 +1633,7 @@ class TraceDetailScreen extends StatelessWidget {
                                   ),
                                   child: Center(
                                     child: Text(
-                                      '${spanDuration}ms',
+                                      '${spanDurMs.round()}ms',
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: Colors.grey.shade900,

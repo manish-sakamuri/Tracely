@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/request_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../providers/trace_provider.dart';
+import 'trace_screen.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -417,37 +419,75 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                               Consumer<RequestProvider>(
                                 builder: (context, provider, child) {
                                   final workspaceProvider = context.watch<WorkspaceProvider>();
-                                  final hasWorkspace = workspaceProvider.selectedWorkspace != null;
+                                  final workspace = workspaceProvider.selectedWorkspace;
+                                  final hasWorkspace = workspace != null;
+                                  final wsName = workspace?['name'] ?? 'No Workspace';
                                   
-                                  return Tooltip(
-                                    message: hasWorkspace ? 'Enable distributed tracing via backend' : 'Select a workspace to enable tracing',
-                                    child: Container(
-                                      height: 40,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: hasWorkspace ? Colors.blue.shade200 : Colors.grey.shade300),
-                                        borderRadius: BorderRadius.circular(6),
-                                        color: hasWorkspace ? Colors.blue.shade50 : Colors.grey.shade50,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.timeline, 
-                                            size: 16, 
-                                            color: hasWorkspace ? Colors.blue.shade700 : Colors.grey.shade400
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Workspace Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        margin: const EdgeInsets.only(right: 8),
+                                        decoration: BoxDecoration(
+                                          color: hasWorkspace ? Colors.blue.shade50 : Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: hasWorkspace ? Colors.blue.shade200 : Colors.grey.shade300,
                                           ),
-                                          const SizedBox(width: 4),
-                                          Switch(
-                                            value: provider.tracingEnabled && hasWorkspace,
-                                            onChanged: hasWorkspace ? (value) {
-                                              provider.setTracingEnabled(value);
-                                            } : null,
-                                            activeColor: Colors.blue.shade700,
-                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          ),
-                                        ],
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              hasWorkspace ? Icons.workspaces_outline : Icons.warning_amber_rounded,
+                                              size: 12,
+                                              color: hasWorkspace ? Colors.blue.shade700 : Colors.orange.shade700,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              wsName,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: hasWorkspace ? Colors.blue.shade800 : Colors.grey.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                      Tooltip(
+                                        message: hasWorkspace ? 'Enable distributed tracing via backend' : 'Select a workspace to enable tracing',
+                                        child: Container(
+                                          height: 40,
+                                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: hasWorkspace ? Colors.blue.shade200 : Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(6),
+                                            color: hasWorkspace ? Colors.blue.shade50 : Colors.grey.shade50,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.timeline, 
+                                                size: 16, 
+                                                color: hasWorkspace ? Colors.blue.shade700 : Colors.grey.shade400
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Switch(
+                                                value: provider.tracingEnabled && hasWorkspace,
+                                                onChanged: hasWorkspace ? (value) {
+                                                  provider.setTracingEnabled(value);
+                                                } : null,
+                                                activeColor: Colors.blue.shade700,
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   );
                                 },
                               ),
@@ -1033,60 +1073,99 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                 letterSpacing: 0.8,
                               ),
                             ),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(response['status']).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: _getStatusColor(response['status']),
-                                          shape: BoxShape.circle,
+                              Row(
+                                children: [
+                                  if (response['trace_id'] != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: TextButton.icon(
+                                        onPressed: () {
+                                          // Fetch trace details and show waterfall
+                                          final traceProvider = context.read<TraceProvider>();
+                                          final wsId = context.read<WorkspaceProvider>().selectedWorkspaceId;
+                                          if (wsId != null) {
+                                            traceProvider.getTraceDetails(wsId, response['trace_id']).then((details) {
+                                              if (details != null && mounted) {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => TraceDetailScreen(trace: details),
+                                                  ),
+                                                );
+                                              }
+                                            });
+                                          }
+                                        },
+                                        icon: const Icon(Icons.timeline, size: 16, color: Color(0xFFFF6B2C)),
+                                        label: const Text(
+                                          'View Trace',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFFFF6B2C),
+                                          ),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                                          backgroundColor: const Color(0xFFFF6B2C).withOpacity(0.1),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '${response['status']} ${_getStatusText(response['status'])}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: _getStatusColor(response['status']),
+                                    ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(response['status']).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: _getStatusColor(response['status']),
+                                            shape: BoxShape.circle,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Text(
-                                    '${response['duration_ms'] ?? response['duration'] ?? 0}ms',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w500,
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '${response['status']} ${_getStatusText(response['status'])}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: _getStatusColor(response['status']),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                  const SizedBox(width: 16),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Text(
+                                      '${response['duration_ms'] ?? response['duration'] ?? 0}ms',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
