@@ -42,6 +42,7 @@ func main() {
 	auditService := services.NewAuditService(db)
 	authService := services.NewAuthService(db, cfg)
 	collectionService := services.NewCollectionService(db)
+	sessionService := services.NewSessionService(db)
 	environmentService := services.NewEnvironmentService(db)
 	failureInjectionService := services.NewFailureInjectionService(db)
 	governanceService := services.NewGovernanceService(db)
@@ -73,6 +74,7 @@ func main() {
 	governanceHandler := handlers.NewGovernanceHandler(governanceService)
 	loadTestHandler := handlers.NewLoadTestHandler(loadTestService)
 	mockHandler := handlers.NewMockHandler(mockService)
+	sessionHandler := handlers.NewSessionHandler(sessionService)
 	monitoringHandler := handlers.NewMonitoringHandler(monitoringService)
 	mutationHandler := handlers.NewMutationHandler(mutationService)
 	percentileCalculatorHandler := handlers.NewPercentileCalculatorHandler(percentileCalculator)
@@ -91,7 +93,7 @@ func main() {
 
 	// Setup router
 	router := setupRouter(cfg, authService, alertHandler, auditHandler, authHandler, collectionHandler,
-		environmentHandler, failureInjectionHandler, governanceHandler, loadTestHandler, mockHandler,
+		environmentHandler, failureInjectionHandler, governanceHandler, loadTestHandler, mockHandler, sessionHandler,
 		monitoringHandler, mutationHandler, percentileCalculatorHandler, replayHandler, requestHandler,
 		schemaValidatorHandler, secretsHandler, settingsHandler, testDataGeneratorHandler, traceHandler,
 		tracingConfigHandler, waterfallHandler, webhookHandler, workflowHandler, workspaceHandler)
@@ -139,6 +141,7 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 	governanceHandler *handlers.GovernanceHandler,
 	loadTestHandler *handlers.LoadTestHandler,
 	mockHandler *handlers.MockHandler,
+	sessionHandler *handlers.SessionHandler,
 	monitoringHandler *handlers.MonitoringHandler,
 	mutationHandler *handlers.MutationHandler,
 	percentileCalculatorHandler *handlers.PercentileCalculatorHandler,
@@ -259,6 +262,10 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 				workspaces.GET("/:workspace_id/mocks", mockHandler.GetAll)
 				workspaces.PUT("/:workspace_id/mocks/:mock_id", mockHandler.Update)
 				workspaces.DELETE("/:workspace_id/mocks/:mock_id", mockHandler.Delete)
+
+				// Session routes
+				workspaces.POST("/:workspace_id/sessions", sessionHandler.Create)
+				workspaces.GET("/:workspace_id/sessions/:session_id", sessionHandler.Get)
 
 				// ========== ENVIRONMENT ROUTES ==========
 				workspaces.GET("/:workspace_id/environments", environmentHandler.GetEnvironments)
