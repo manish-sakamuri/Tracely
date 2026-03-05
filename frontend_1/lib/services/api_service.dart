@@ -3,10 +3,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8081/api/v1';
-  // For Android emulator: 'http://10.0.2.2:8081/api/v1'
-  // For iOS simulator: 'http://localhost:8081/api/v1'
-  // For real device: 'http://YOUR_IP:8081/api/v1'
+  static const String baseUrl = 'http://localhost:8080/api/v1';
+  // For Android emulator: 'http://10.0.2.2:8080/api/v1'
+  // For iOS simulator: 'http://localhost:8080/api/v1'
+  // For real device: 'http://YOUR_IP:8080/api/v1'
   
   String? _accessToken;
   String? _refreshToken;
@@ -1040,7 +1040,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> importCollection(String workspaceId, Map<String, dynamic> jsonData) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/workspaces/$workspaceId/collections/import'),
+      Uri.parse('$baseUrl/workspaces/$workspaceId/collections/import/postman'),
       headers: await _getHeaders(),
       body: json.encode(jsonData),
     );

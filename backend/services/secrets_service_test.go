@@ -50,14 +50,19 @@ func TestSecretsService_CreateSecret(t *testing.T) {
 	description := "test description"
 
 	mock.ExpectBegin()
-	// 1. Use a Regex that is very forgiving
-	mock.ExpectQuery(`(?i)INSERT INTO "secrets"`).
+	mock.ExpectExec(`(?i)INSERT INTO "secrets"`).
 		WithArgs(
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // id
+			sqlmock.AnyArg(), // workspace_id
+			sqlmock.AnyArg(), // key
+			sqlmock.AnyArg(), // value
+			sqlmock.AnyArg(), // description
+			sqlmock.AnyArg(), // created_by
+			sqlmock.AnyArg(), // created_at
+			sqlmock.AnyArg(), // updated_at
+			sqlmock.AnyArg(), // expires_at
 		).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("5397a17a-03fd-49e3-8dd3-00d37728a622"))
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	// Execution

@@ -43,17 +43,17 @@ func TestMonitoringService_GetDashboard(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(80))
 
 	// 4. Mock Average Response Time (AVG)
-	// Important: This matches Row().Scan()
 	mock.ExpectQuery(`(?i)SELECT AVG\(response_time_ms\) FROM "executions"`).
+		WithArgs(sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"avg"}).AddRow(150.5))
 
-	// 5. Mock Services List (Group By)
-	mock.ExpectQuery(`(?i)SELECT \* FROM "traces" WHERE .*workspace_id.*GROUP BY "service_name"`).
+	// 5. Mock distinct service names from traces
+	mock.ExpectQuery(`(?i)SELECT DISTINCT "service_name" FROM "traces" WHERE .*workspace_id.*start_time >=`).
 		WithArgs(workspaceID, sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"service_name"}).AddRow("auth-service"))
 
 	// 6. Mock Individual Service Request Count
-	mock.ExpectQuery(`(?i)SELECT count\(\*\) FROM "traces" WHERE .*workspace_id.*service_name.*`).
+	mock.ExpectQuery(`(?i)SELECT count\(\*\) FROM "traces" WHERE .*workspace_id.*service_name.*start_time >=`).
 		WithArgs(workspaceID, "auth-service", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(50))
 

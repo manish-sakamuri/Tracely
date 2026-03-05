@@ -75,6 +75,7 @@ func main() {
 	loadTestHandler := handlers.NewLoadTestHandler(loadTestService)
 	mockHandler := handlers.NewMockHandler(mockService)
 	sessionHandler := handlers.NewSessionHandler(sessionService)
+	piiHandler := handlers.NewPIIHandler()
 	monitoringHandler := handlers.NewMonitoringHandler(monitoringService)
 	mutationHandler := handlers.NewMutationHandler(mutationService)
 	percentileCalculatorHandler := handlers.NewPercentileCalculatorHandler(percentileCalculator)
@@ -93,7 +94,7 @@ func main() {
 
 	// Setup router
 	router := setupRouter(cfg, authService, alertHandler, auditHandler, authHandler, collectionHandler,
-		environmentHandler, failureInjectionHandler, governanceHandler, loadTestHandler, mockHandler, sessionHandler,
+		environmentHandler, failureInjectionHandler, governanceHandler, loadTestHandler, mockHandler, sessionHandler, piiHandler,
 		monitoringHandler, mutationHandler, percentileCalculatorHandler, replayHandler, requestHandler,
 		schemaValidatorHandler, secretsHandler, settingsHandler, testDataGeneratorHandler, traceHandler,
 		tracingConfigHandler, waterfallHandler, webhookHandler, workflowHandler, workspaceHandler)
@@ -142,6 +143,7 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 	loadTestHandler *handlers.LoadTestHandler,
 	mockHandler *handlers.MockHandler,
 	sessionHandler *handlers.SessionHandler,
+	piiHandler *handlers.PIIHandler,
 	monitoringHandler *handlers.MonitoringHandler,
 	mutationHandler *handlers.MutationHandler,
 	percentileCalculatorHandler *handlers.PercentileCalculatorHandler,
@@ -214,6 +216,7 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 			{
 				workspaces.GET("", workspaceHandler.GetAll)
 				workspaces.POST("", workspaceHandler.Create)
+				workspaces.POST("/initialize", workspaceHandler.Initialize)
 				workspaces.GET("/:workspace_id", workspaceHandler.GetByID)
 				workspaces.PUT("/:workspace_id", workspaceHandler.Update)
 				workspaces.DELETE("/:workspace_id", workspaceHandler.Delete)
@@ -267,6 +270,9 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 				// Session routes
 				workspaces.POST("/:workspace_id/sessions", sessionHandler.Create)
 				workspaces.GET("/:workspace_id/sessions/:session_id", sessionHandler.Get)
+
+				// PII masking helper
+				workspaces.POST("/:workspace_id/pii/mask", piiHandler.Mask)
 
 				// ========== ENVIRONMENT ROUTES ==========
 				workspaces.GET("/:workspace_id/environments", environmentHandler.GetEnvironments)

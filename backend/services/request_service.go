@@ -220,11 +220,7 @@ func (s *RequestService) Execute(
 		return nil, err
 	}
 
-	// Get collection and workspace info for trace
-	var collection models.Collection
-	s.db.First(&collection, request.CollectionID)
-
-	// Create Trace record
+	// Use preloaded collection/workspace info for trace
 	status := "success"
 	if execution.StatusCode >= 400 || execution.ErrorMessage != "" {
 		status = "error"
@@ -232,7 +228,7 @@ func (s *RequestService) Execute(
 
 	trace := models.Trace{
 		ID:              traceID,
-		WorkspaceID:     collection.WorkspaceID,
+		WorkspaceID:     request.Collection.WorkspaceID,
 		ServiceName:     request.Name,
 		SpanCount:       1,
 		TotalDurationMs: float64(responseTime),

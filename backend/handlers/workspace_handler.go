@@ -58,6 +58,48 @@ func (h *WorkspaceHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, workspace)
 }
 
+// Initialize creates a workspace from a template payload.
+// Currently this behaves like Create and ignores template-specific seeding.
+func (h *WorkspaceHandler) Initialize(c *gin.Context) {
+	userID, err := middlewares.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var payload struct {
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		TemplateID  int    `json:"template_id"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// For now, map templates to simple workspace types; can be expanded later.
+	wsType := "internal"
+	switch payload.TemplateID {
+	case 0:
+		wsType = "personal"
+	case 1, 2, 3:
+		wsType = "internal"
+	case 4:
+		wsType = "partner"
+	default:
+		wsType = "internal"
+	}
+
+	workspace, err := h.workspaceService.Create(payload.Name, payload.Description, wsType, false, "team", userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, workspace)
+}
+
 // GetAll handles GET /workspaces
 // It retrieves all workspaces where the user is a member or owner
 func (h *WorkspaceHandler) GetAll(c *gin.Context) {
