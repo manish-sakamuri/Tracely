@@ -221,6 +221,7 @@ func setupRouter(cfg *config.Config, authService *services.AuthService,
 				// Collection routes
 				workspaces.GET("/:workspace_id/collections", collectionHandler.GetAll)
 				workspaces.POST("/:workspace_id/collections", collectionHandler.Create)
+				workspaces.POST("/:workspace_id/collections/import/postman", collectionHandler.ImportFromPostman)
 				workspaces.GET("/:workspace_id/collections/:collection_id", collectionHandler.GetByID)
 				workspaces.PUT("/:workspace_id/collections/:collection_id", collectionHandler.Update)
 				workspaces.DELETE("/:workspace_id/collections/:collection_id", collectionHandler.Delete)

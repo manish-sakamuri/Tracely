@@ -9,6 +9,7 @@ package handlers
 
 import (
 	"backend/middlewares"
+	"backend/models"
 	"backend/services"
 	"net/http"
 
@@ -30,6 +31,12 @@ func NewCollectionHandler(collectionService *services.CollectionService) *Collec
 type CreateCollectionRequest struct {
 	Name        string `json:"name" binding:"required"` // Collection name is required
 	Description string `json:"description"`             // Optional collection description
+}
+
+// ImportPostmanCollectionResponse represents the response after importing a Postman collection.
+type ImportPostmanCollectionResponse struct {
+	Collection *models.Collection `json:"collection"`
+	Requests   []models.Request   `json:"requests"`
 }
 
 // Create handles POST requests to create a new collection within a workspace.
@@ -141,4 +148,33 @@ func (h *CollectionHandler) Delete(c *gin.Context) {
 
 	// Return HTTP 204 No Content on successful deletion
 	c.Status(http.StatusNoContent)
+}
+
+// ImportFromPostman handles importing a Postman collection JSON into a workspace collection and requests.
+// Expects raw Postman collection JSON in the request body.
+func (h *CollectionHandler) ImportFromPostman(c *gin.Context) {
+	userID, _ := middlewares.GetUserID(c)
+
+	workspaceID, err := uuid.Parse(c.Param("workspace_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID"})
+		return
+	}
+
+	payload, err := c.GetRawData()
+	if err != nil || len(payload) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or empty Postman collection payload"})
+		return
+	}
+
+	collection, requests, err := h.collectionService.ImportFromPostmanJSON(workspaceID, userID, payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, ImportPostmanCollectionResponse{
+		Collection: collection,
+		Requests:   requests,
+	})
 }

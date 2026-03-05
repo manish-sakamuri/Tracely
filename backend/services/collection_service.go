@@ -6,7 +6,9 @@ for collections within a workspace. Access control is enforced via WorkspaceServ
 package services
 
 import (
+	"backend/integrations"
 	"backend/models"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -120,4 +122,56 @@ func (s *CollectionService) Delete(collectionID, userID uuid.UUID) error {
 
 	// Delete collection
 	return s.db.Delete(&collection).Error
+}
+
+// ImportFromPostmanJSON creates a collection and requests from a Postman collection JSON payload.
+// It enforces workspace access and uses the PostmanImporter to parse the payload.
+func (s *CollectionService) ImportFromPostmanJSON(workspaceID, userID uuid.UUID, postmanJSON []byte) (*models.Collection, []models.Request, error) {
+	// Check access to workspace
+	if !s.workspaceService.HasAccess(workspaceID, userID) {
+		return nil, nil, errors.New("access denied")
+	}
+
+	importer := integrations.NewPostmanImporter()
+	collectionData, err := importer.ImportFromBytes(postmanJSON)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create the collection
+	createdCollection, err := s.Create(workspaceID, collectionData.Info.Name, collectionData.Info.Description, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	requestService := NewRequestService(s.db)
+	var createdRequests []models.Request
+
+	for _, item := range collectionData.Item {
+		headersMap := make(map[string]string)
+		for _, h := range item.Request.Header {
+			headersMap[h.Key] = h.Value
+		}
+
+		headersJSON, _ := json.Marshal(headersMap)
+
+		reqModel, err := requestService.Create(
+			createdCollection.ID,
+			item.Name,
+			item.Request.Method,
+			item.Request.URL.Raw,
+			string(headersJSON),
+			"{}",
+			item.Request.Body.Raw,
+			"",
+			userID,
+		)
+		if err != nil {
+			return createdCollection, createdRequests, err
+		}
+
+		createdRequests = append(createdRequests, *reqModel)
+	}
+
+	return createdCollection, createdRequests, nil
 }

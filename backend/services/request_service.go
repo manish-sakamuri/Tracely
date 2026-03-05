@@ -8,12 +8,14 @@ package services
 
 import (
 	"backend/models"
+	"backend/utils"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +26,7 @@ import (
 type RequestService struct {
 	db               *gorm.DB
 	workspaceService *WorkspaceService
+	piiMasker        *utils.PIIMasker
 }
 
 // NewRequestService creates a new RequestService instance with DB connection.
@@ -31,6 +34,7 @@ func NewRequestService(db *gorm.DB) *RequestService {
 	return &RequestService{
 		db:               db,
 		workspaceService: NewWorkspaceService(db),
+		piiMasker:        utils.NewPIIMasker(),
 	}
 }
 
@@ -197,12 +201,17 @@ func (s *RequestService) Execute(
 		defer resp.Body.Close()
 		execution.StatusCode = resp.StatusCode
 
-		// Capture response body
+		// Capture and mask response body
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		execution.ResponseBody = string(bodyBytes)
+		execution.ResponseBody = s.piiMasker.MaskJSON(string(bodyBytes))
 
-		// Save response headers
-		headersJSON, _ := json.Marshal(resp.Header)
+		// Save masked response headers
+		flatHeaders := make(map[string]string)
+		for k, vals := range resp.Header {
+			flatHeaders[k] = strings.Join(vals, ",")
+		}
+		maskedHeaders := s.piiMasker.MaskHeaders(flatHeaders)
+		headersJSON, _ := json.Marshal(maskedHeaders)
 		execution.ResponseHeaders = string(headersJSON)
 	}
 
@@ -323,8 +332,14 @@ func (s *RequestService) QuickExecute(
 		defer resp.Body.Close()
 		execution.StatusCode = resp.StatusCode
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		execution.ResponseBody = string(bodyBytes)
-		headersJSON, _ := json.Marshal(resp.Header)
+		execution.ResponseBody = s.piiMasker.MaskJSON(string(bodyBytes))
+
+		flatHeaders := make(map[string]string)
+		for k, vals := range resp.Header {
+			flatHeaders[k] = strings.Join(vals, ",")
+		}
+		maskedHeaders := s.piiMasker.MaskHeaders(flatHeaders)
+		headersJSON, _ := json.Marshal(maskedHeaders)
 		execution.ResponseHeaders = string(headersJSON)
 	}
 

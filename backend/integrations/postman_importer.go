@@ -44,12 +44,15 @@ func (p *PostmanImporter) ImportFromFile(filepath string) (*PostmanCollection, e
 	if err != nil {
 		return nil, err
 	}
+	return p.ImportFromBytes(data)
+}
 
+// ImportFromBytes parses a Postman collection from raw JSON bytes.
+func (p *PostmanImporter) ImportFromBytes(data []byte) (*PostmanCollection, error) {
 	var collection PostmanCollection
 	if err := json.Unmarshal(data, &collection); err != nil {
 		return nil, err
 	}
-
 	return &collection, nil
 }
 
