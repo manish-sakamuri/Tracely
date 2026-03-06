@@ -48,6 +48,31 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
+    await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_email');
+  }
+
+  /// Persist user info so it survives refresh
+  Future<void> saveUserInfo(String userId, String name, String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_id', userId);
+    await prefs.setString('user_name', name);
+    await prefs.setString('user_email', email);
+  }
+
+  /// Load persisted user info (for use after refresh)
+  Future<Map<String, dynamic>?> loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString('user_id');
+    final name = prefs.getString('user_name');
+    final email = prefs.getString('user_email');
+    if (id == null && name == null && email == null) return null;
+    return {
+      'id': id,
+      'name': name ?? '',
+      'email': email ?? '',
+    };
   }
   
   /// Ensures workspaceId is valid (non-null, non-empty, not literal "null").

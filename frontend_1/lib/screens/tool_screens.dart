@@ -678,21 +678,43 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
 
   Future<void> _createWebhook() async {
     final wsId = context.read<WorkspaceProvider>().selectedWorkspaceId;
-    if (wsId == null) return;
-    final urlCtrl = TextEditingController(text: 'https://hooks.slack.com/services/...');
-    final eventCtrl = TextEditingController(text: 'test_failure');
+    if (wsId == null || wsId.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a workspace first'), backgroundColor: Colors.orange));
+      return;
+    }
+    final nameCtrl = TextEditingController(text: 'My Webhook');
+    final urlCtrl = TextEditingController(text: 'https://hooks.slack.com/services/example/incoming');
+    final eventCtrl = TextEditingController(text: 'trace.created');
+    final secretCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('Create Webhook'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'Webhook URL', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        TextField(controller: eventCtrl, decoration: const InputDecoration(labelText: 'Event Type', border: OutlineInputBorder())),
-      ]),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name', hintText: 'e.g. Slack Alerts', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'Webhook URL', hintText: 'https://...', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: eventCtrl, decoration: const InputDecoration(labelText: 'Events (comma-separated)', hintText: 'e.g. trace.created, request.failed', border: OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextField(controller: secretCtrl, decoration: const InputDecoration(labelText: 'Secret (optional)', border: OutlineInputBorder())),
+        ]),
+      ),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create'))],
     ));
     if (confirmed == true) {
       try {
-        final res = await ApiService().createWebhook(wsId, {'url': urlCtrl.text, 'event_type': eventCtrl.text, 'enabled': true});
+        final eventStr = eventCtrl.text.trim();
+        final events = eventStr.isEmpty ? ['trace.created'] : eventStr.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        if (events.isEmpty) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add at least one event'), backgroundColor: Colors.orange));
+          return;
+        }
+        final res = await ApiService().createWebhook(wsId, {
+          'name': nameCtrl.text.trim().isEmpty ? 'My Webhook' : nameCtrl.text.trim(),
+          'url': urlCtrl.text.trim(),
+          'events': events,
+          if (secretCtrl.text.trim().isNotEmpty) 'secret': secretCtrl.text.trim(),
+        });
         setState(() => _result = res);
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Webhook created'), backgroundColor: Colors.green));
       } catch (e) {
@@ -703,9 +725,15 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
 
   Future<void> _triggerWebhook() async {
     final wsId = context.read<WorkspaceProvider>().selectedWorkspaceId;
-    if (wsId == null) return;
+    if (wsId == null || wsId.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a workspace first'), backgroundColor: Colors.orange));
+      return;
+    }
     try {
-      final res = await ApiService().triggerWebhook(wsId, {'event': 'manual_test', 'message': 'Test trigger from Tracely'});
+      final res = await ApiService().triggerWebhook(wsId, {
+        'event_type': 'manual_test',
+        'payload': {'message': 'Test trigger from Tracely', 'source': 'tracely_ui'},
+      });
       setState(() => _result = res);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Webhook triggered'), backgroundColor: Colors.green));
     } catch (e) {

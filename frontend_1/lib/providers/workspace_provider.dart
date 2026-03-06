@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+
+const String _kSelectedWorkspaceId = 'selected_workspace_id';
 
 // Workspace type enum with 3 types: personal, internal (team), partner, enterprise
 enum WorkspaceType { personal, internal, partner, enterprise }
@@ -21,9 +24,18 @@ class WorkspaceProvider with ChangeNotifier {
   dynamic get selectedWorkspace {
     if (_selectedWorkspaceId == null) return null;
     try {
-      return _workspaces.firstWhere((w) => w['id'] == _selectedWorkspaceId);
+      return _workspaces.firstWhere((w) => w['id']?.toString() == _selectedWorkspaceId);
     } catch (e) {
       return null;
+    }
+  }
+  
+  Future<void> _persistSelectedWorkspaceId(String? id) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (id != null && id.isNotEmpty && id != 'null') {
+      await prefs.setString(_kSelectedWorkspaceId, id);
+    } else {
+      await prefs.remove(_kSelectedWorkspaceId);
     }
   }
   
@@ -33,12 +45,27 @@ class WorkspaceProvider with ChangeNotifier {
     notifyListeners();
     
     try {
+      // Restore last selected workspace so it survives refresh
+      final prefs = await SharedPreferences.getInstance();
+      final savedId = prefs.getString(_kSelectedWorkspaceId);
+      if (savedId != null && savedId.trim().isNotEmpty && savedId != 'null') {
+        _selectedWorkspaceId = savedId;
+      }
+      
       _workspaces = await _apiService.getWorkspaces();
-      if (_workspaces.isNotEmpty && _selectedWorkspaceId == null) {
-        final id = _workspaces[0]['id']?.toString();
-        // Only set if we have a valid UUID-like value (avoid "null" or empty)
-        if (id != null && id.trim().isNotEmpty && id != 'null') {
-          _selectedWorkspaceId = id;
+      
+      if (_workspaces.isEmpty) {
+        _selectedWorkspaceId = null;
+        await _persistSelectedWorkspaceId(null);
+      } else {
+        final idStr = _selectedWorkspaceId?.toString();
+        final exists = idStr != null && _workspaces.any((w) => w['id']?.toString() == idStr);
+        if (!exists || _selectedWorkspaceId == null) {
+          final id = _workspaces[0]['id']?.toString();
+          if (id != null && id.trim().isNotEmpty && id != 'null') {
+            _selectedWorkspaceId = id;
+            await _persistSelectedWorkspaceId(id);
+          }
         }
       }
     } catch (e) {
@@ -50,13 +77,18 @@ class WorkspaceProvider with ChangeNotifier {
     }
   }
   
-  void selectWorkspace(String workspaceId) {
+  Future<void> selectWorkspace(String workspaceId) async {
     _selectedWorkspaceId = workspaceId;
+    await _persistSelectedWorkspaceId(workspaceId);
     notifyListeners();
   }
 
-  void setSelectedWorkspace(Map<String, dynamic> workspace) {
-    _selectedWorkspaceId = workspace['id'];
+  Future<void> setSelectedWorkspace(Map<String, dynamic> workspace) async {
+    final id = workspace['id']?.toString();
+    if (id != null) {
+      _selectedWorkspaceId = id;
+      await _persistSelectedWorkspaceId(id);
+    }
     notifyListeners();
   }
   
@@ -111,7 +143,9 @@ class WorkspaceProvider with ChangeNotifier {
       );
       
       _workspaces.add(workspace);
-      _selectedWorkspaceId = workspace['id'].toString();
+      final id = workspace['id'].toString();
+      _selectedWorkspaceId = id;
+      await _persistSelectedWorkspaceId(id);
       
       _isLoading = false;
       notifyListeners();
@@ -174,6 +208,7 @@ class WorkspaceProvider with ChangeNotifier {
       
       if (_selectedWorkspaceId == workspaceId) {
         _selectedWorkspaceId = _workspaces.isNotEmpty ? _workspaces[0]['id'].toString() : null;
+        await _persistSelectedWorkspaceId(_selectedWorkspaceId);
       }
       
       _isLoading = false;
@@ -210,7 +245,9 @@ class WorkspaceProvider with ChangeNotifier {
       );
 
       _workspaces.add(workspace);
-      _selectedWorkspaceId = workspace['id'].toString();
+      final id = workspace['id'].toString();
+      _selectedWorkspaceId = id;
+      await _persistSelectedWorkspaceId(id);
 
       _isLoading = false;
       notifyListeners();

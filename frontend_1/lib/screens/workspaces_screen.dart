@@ -377,9 +377,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final color = _getWorkspaceColor(workspace['id']);
     
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         // Select workspace and navigate to collections
-        context.read<WorkspaceProvider>().selectWorkspace(workspace['id']);
+        await context.read<WorkspaceProvider>().selectWorkspace(workspace['id']?.toString() ?? '');
+        if (!context.mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(

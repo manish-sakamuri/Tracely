@@ -106,16 +106,24 @@ class _TracelyRouterState extends State<TracelyRouter> {
   // 0 = landing, 1 = auth, 2 = home (dashboard)
   int _currentView = 0;
   String? _prefillEmail;
+  bool _isHydrating = false;
 
   void _goToLanding() => setState(() => _currentView = 0);
   void _goToAuth([String? email]) => setState(() {
     _prefillEmail = email;
     _currentView = 1;
   });
-  void _goToHome() {
-    setState(() => _currentView = 2);
-    // Hydrate data on entering home
-    _hydrateAppData();
+
+  /// Navigate to Home. Awaits hydration so workspace + user state are restored after refresh.
+  Future<void> _goToHome() async {
+    if (_currentView == 2 || _isHydrating) return;
+    setState(() => _isHydrating = true);
+    await _hydrateAppData();
+    if (!mounted) return;
+    setState(() {
+      _isHydrating = false;
+      _currentView = 2;
+    });
   }
 
   void _handleLogout() async {
@@ -136,11 +144,12 @@ class _TracelyRouterState extends State<TracelyRouter> {
   @override
   void initState() {
     super.initState();
-    // Check auth state on startup
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // After first frame, if already authenticated (e.g. after refresh), hydrate and go to home
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.isAuthenticated) {
-        _goToHome();
+      if (authProvider.isAuthenticated && _currentView < 2) {
+        await _goToHome();
       }
     });
   }
@@ -173,11 +182,29 @@ class _TracelyRouterState extends State<TracelyRouter> {
           );
         }
 
-        // Auto-redirect if already authenticated but on landing/auth
-        if (authProvider.isAuthenticated && _currentView < 2) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _goToHome();
+        // Auto-redirect if already authenticated but on landing/auth (e.g. after refresh)
+        if (authProvider.isAuthenticated && _currentView < 2 && !_isHydrating) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _goToHome();
           });
+        }
+
+        if (_isHydrating) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(color: Color(0xFFFF6B2C)),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading your workspace...',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         switch (_currentView) {

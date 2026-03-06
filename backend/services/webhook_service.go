@@ -4,32 +4,11 @@ import (
 	"encoding/json"
 	"time"
 
+	"backend/models"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
-
-type Webhook struct {
-	ID          uuid.UUID `gorm:"type:uuid;primary_key"`
-	WorkspaceID uuid.UUID `gorm:"type:uuid;not null"`
-	Name        string    `gorm:"not null"`
-	URL         string    `gorm:"not null"`
-	Secret      string    // For signature validation
-	Events      string    `gorm:"type:jsonb"` // Which events trigger this webhook
-	Enabled     bool      `gorm:"default:true"`
-	CreatedAt   time.Time
-}
-
-type WebhookEvent struct {
-	ID          uuid.UUID `gorm:"type:uuid;primary_key"`
-	WebhookID   uuid.UUID `gorm:"type:uuid;not null"`
-	EventType   string    `gorm:"not null"`
-	Payload     string    `gorm:"type:jsonb"`
-	Status      string    `gorm:"default:'pending'"` // pending, sent, failed
-	Attempts    int       `gorm:"default:0"`
-	LastAttempt *time.Time
-	Response    string
-	CreatedAt   time.Time
-}
 
 type WebhookService struct {
 	db *gorm.DB
@@ -40,11 +19,10 @@ func NewWebhookService(db *gorm.DB) *WebhookService {
 }
 
 // CreateWebhook creates a new webhook
-func (s *WebhookService) CreateWebhook(workspaceID uuid.UUID, name, url, secret string, events []string) (*Webhook, error) {
+func (s *WebhookService) CreateWebhook(workspaceID uuid.UUID, name, url, secret string, events []string) (*models.Webhook, error) {
 	eventsJSON, _ := json.Marshal(events)
 
-	webhook := Webhook{
-		ID:          uuid.New(),
+	webhook := models.Webhook{
 		WorkspaceID: workspaceID,
 		Name:        name,
 		URL:         url,
@@ -62,7 +40,7 @@ func (s *WebhookService) CreateWebhook(workspaceID uuid.UUID, name, url, secret 
 
 // TriggerWebhook triggers webhooks for an event
 func (s *WebhookService) TriggerWebhook(workspaceID uuid.UUID, eventType string, payload map[string]interface{}) error {
-	var webhooks []Webhook
+	var webhooks []models.Webhook
 	s.db.Where("workspace_id = ? AND enabled = true", workspaceID).Find(&webhooks)
 
 	for _, webhook := range webhooks {
@@ -84,8 +62,7 @@ func (s *WebhookService) TriggerWebhook(workspaceID uuid.UUID, eventType string,
 
 		// Create webhook event
 		payloadJSON, _ := json.Marshal(payload)
-		event := WebhookEvent{
-			ID:        uuid.New(),
+		event := models.WebhookEvent{
 			WebhookID: webhook.ID,
 			EventType: eventType,
 			Payload:   string(payloadJSON),
@@ -101,7 +78,7 @@ func (s *WebhookService) TriggerWebhook(workspaceID uuid.UUID, eventType string,
 	return nil
 }
 
-func (s *WebhookService) sendWebhook(webhook *Webhook, event *WebhookEvent) {
+func (s *WebhookService) sendWebhook(webhook *models.Webhook, event *models.WebhookEvent) {
 	// Implementation would send HTTP POST to webhook.URL with event.Payload
 	// For now, just mark as sent
 	now := time.Now()

@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/trace_provider.dart';
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // 8=mock, 9=load test, 10=schema validator, 11=test data, 12=failure injection,
   // 13=mutation, 14=workflows, 15=webhooks, 16=secrets, 17=audit, 18=alerts,
   // 19=environments, 20=monitoring, 21=percentile, 22=tracing config, 23=waterfall
+  static const String _kSelectedNavKey = 'home_selected_nav';
   int _selectedNav = 0;
   String _selectedTimeRange = 'Today';
   String _searchQuery = '';
@@ -49,13 +51,33 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _sidebarCollapsed = false;
   Timer? _autoRefreshTimer;
 
+  Future<void> _persistSelectedNav(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kSelectedNavKey, index);
+  }
+
+  void _selectNav(int index) {
+    if (_selectedNav == index) return;
+    setState(() => _selectedNav = index);
+    _persistSelectedNav(index);
+  }
+
   @override
   void initState() {
     super.initState();
+    _restoreSelectedNav();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboardData();
       _startAutoRefresh();
     });
+  }
+
+  Future<void> _restoreSelectedNav() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt(_kSelectedNavKey);
+    if (saved != null && saved >= 0 && saved <= 23 && mounted) {
+      setState(() => _selectedNav = saved);
+    }
   }
 
   @override
@@ -351,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(() => _selectedNav = index),
+        onTap: () => _selectNav(index),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: _sidebarCollapsed ? 12 : 14,
@@ -392,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => setState(() => _selectedNav = navIndex),
+        onTap: () => _selectNav(navIndex),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -466,8 +488,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              onSelected: (id) {
-                workspaceProvider.selectWorkspace(id);
+              onSelected: (id) async {
+                await workspaceProvider.selectWorkspace(id);
                 _loadDashboardData();
               },
               itemBuilder: (context) => workspaceProvider.workspaces.map<PopupMenuEntry<String>>((w) {
@@ -551,7 +573,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 24),
             if (workspaceProvider.workspaces.isEmpty)
               TextButton.icon(
-                onPressed: () => setState(() => _selectedNav = 5),
+                onPressed: () => _selectNav(5),
                 icon: const Icon(Icons.add),
                 label: const Text('Go to Workspaces'),
               ),
@@ -710,19 +732,19 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildQuickAction(Icons.play_arrow, 'New Request', () => setState(() => _selectedNav = 1), 0),
+              _buildQuickAction(Icons.play_arrow, 'New Request', () => _selectNav(1), 0),
               const SizedBox(width: 12),
               _buildQuickAction(Icons.workspaces_outlined, 'New Workspace', () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceSetupScreen()));
               }, 1),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.folder_outlined, 'Collections', () => setState(() => _selectedNav = 2), 2),
+              _buildQuickAction(Icons.folder_outlined, 'Collections', () => _selectNav(2), 2),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.replay, 'Replay Trace', () => setState(() => _selectedNav = 4), 3),
+              _buildQuickAction(Icons.replay, 'Replay Trace', () => _selectNav(4), 3),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.timeline, 'View Traces', () => setState(() => _selectedNav = 3), 4),
+              _buildQuickAction(Icons.timeline, 'View Traces', () => _selectNav(3), 4),
               const SizedBox(width: 12),
-              _buildQuickAction(Icons.policy, 'Governance', () => setState(() => _selectedNav = 6), 5),
+              _buildQuickAction(Icons.policy, 'Governance', () => _selectNav(6), 5),
             ],
           ),
           const SizedBox(height: 32),
@@ -769,10 +791,10 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSpacing: 16,
             childAspectRatio: 1.3,
             children: [
-              _buildToolCard('Request Studio', 'Build & test API requests with full control', Icons.edit_note, 'Core', () => setState(() => _selectedNav = 1)),
-              _buildToolCard('Traces & Waterfall', 'Visualize distributed traces with span analysis', Icons.timeline, 'Observability', () => setState(() => _selectedNav = 3)),
-              _buildToolCard('Replay Engine', 'Reproduce bugs by replaying historical traces', Icons.replay_circle_filled, 'Debug', () => setState(() => _selectedNav = 4)),
-              _buildToolCard('Workspaces', 'Manage workspaces, collections & team access', Icons.workspaces, 'Management', () => setState(() => _selectedNav = 5)),
+              _buildToolCard('Request Studio', 'Build & test API requests with full control', Icons.edit_note, 'Core', () => _selectNav(1)),
+              _buildToolCard('Traces & Waterfall', 'Visualize distributed traces with span analysis', Icons.timeline, 'Observability', () => _selectNav(3)),
+              _buildToolCard('Replay Engine', 'Reproduce bugs by replaying historical traces', Icons.replay_circle_filled, 'Debug', () => _selectNav(4)),
+              _buildToolCard('Workspaces', 'Manage workspaces, collections & team access', Icons.workspaces, 'Management', () => _selectNav(5)),
             ],
           ),
           const SizedBox(height: 32),
@@ -977,7 +999,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => setState(() => _selectedNav = navIndex),
+        onTap: () => _selectNav(navIndex),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -1127,7 +1149,7 @@ class _HomeScreenState extends State<HomeScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: InkWell(
-                  onTap: () => setState(() => _selectedNav = 3),
+                  onTap: () => _selectNav(3),
                   child: Row(
                     children: [
                       Container(

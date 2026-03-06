@@ -332,3 +332,29 @@ type Alert struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// Webhook represents a webhook subscription for a workspace
+type Webhook struct {
+	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	WorkspaceID uuid.UUID `gorm:"type:uuid;not null" json:"workspace_id"`
+	Name        string    `gorm:"not null" json:"name"`
+	URL         string    `gorm:"not null" json:"url"`
+	Secret      string    `json:"secret"`
+	Events      string    `gorm:"type:jsonb" json:"events"`
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// WebhookEvent represents a webhook delivery event
+type WebhookEvent struct {
+	ID          uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	WebhookID   uuid.UUID  `gorm:"type:uuid;not null" json:"webhook_id"`
+	EventType   string     `gorm:"not null" json:"event_type"`
+	Payload     string     `gorm:"type:jsonb" json:"payload"`
+	Status      string     `gorm:"default:'pending'" json:"status"`
+	Attempts    int        `gorm:"default:0" json:"attempts"`
+	LastAttempt *time.Time `json:"last_attempt"`
+	Response    string     `json:"response"`
+	CreatedAt   time.Time  `json:"created_at"`
+}

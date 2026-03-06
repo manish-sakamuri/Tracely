@@ -24,6 +24,18 @@ class AuthProvider with ChangeNotifier {
     await _apiService.loadTokens();
     _isAuthenticated = _apiService.isAuthenticated;
     
+    // Restore user info after refresh so name/email still show
+    if (_isAuthenticated) {
+      final saved = await _apiService.loadUserInfo();
+      if (saved != null) {
+        _user = {
+          'id': saved['id'],
+          'name': saved['name'],
+          'email': saved['email'],
+        };
+      }
+    }
+    
     _isLoading = false;
     notifyListeners();
   }
@@ -32,12 +44,15 @@ class AuthProvider with ChangeNotifier {
     try {
       _errorMessage = null;
       final data = await _apiService.login(email, password);
+      final userId = data['user_id']?.toString() ?? '';
+      final name = data['name']?.toString() ?? '';
+      final emailStr = data['email']?.toString() ?? email;
       _user = {
-      'id': data['user_id'],
-      'name': data['name'],
-      'email': data['email'],
-      'token': data['token'], // <-- add token here
-    };
+        'id': userId,
+        'name': name,
+        'email': emailStr,
+      };
+      await _apiService.saveUserInfo(userId, name, emailStr);
       _isAuthenticated = true;
       notifyListeners();
       return true;
