@@ -50,6 +50,16 @@ class ApiService {
     await prefs.remove('refresh_token');
   }
   
+  /// Ensures workspaceId is valid (non-null, non-empty, not literal "null").
+  /// Backend expects a UUID; invalid values cause 400 Bad Request.
+  void _requireValidWorkspaceId(String? workspaceId) {
+    if (workspaceId == null ||
+        workspaceId.trim().isEmpty ||
+        workspaceId == 'null') {
+      throw Exception('Select a workspace first');
+    }
+  }
+
   // Get headers with optional auth
   Future<Map<String, String>> _getHeaders({bool includeAuth = true}) async {
     final headers = {
@@ -231,6 +241,7 @@ class ApiService {
     String name,
     {String? description}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId'),
       headers: await _getHeaders(),
@@ -244,6 +255,7 @@ class ApiService {
   }
 
   Future<void> deleteWorkspace(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId'),
       headers: await _getHeaders(),
@@ -255,6 +267,7 @@ class ApiService {
   // ==================== COLLECTION ENDPOINTS ====================
   
   Future<List<dynamic>> getCollections(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections'),
       headers: await _getHeaders(),
@@ -269,6 +282,7 @@ class ApiService {
     String name,
     {String? description}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections'),
       headers: await _getHeaders(),
@@ -282,6 +296,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getCollectionById(String workspaceId, String collectionId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId'),
       headers: await _getHeaders(),
@@ -290,6 +305,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> updateCollection(String workspaceId, String collectionId, String name, {String? description}) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId'),
       headers: await _getHeaders(),
@@ -302,6 +318,7 @@ class ApiService {
   }
 
   Future<void> deleteCollection(String workspaceId, String collectionId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId'),
       headers: await _getHeaders(),
@@ -316,6 +333,7 @@ class ApiService {
     String collectionId,
     Map<String, dynamic> requestData,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId/requests'),
       headers: await _getHeaders(),
@@ -329,6 +347,7 @@ class ApiService {
     String requestId,
     {String? overrideUrl, Map<String, String>? overrideHeaders, String? traceId, String? spanId, String? parentSpanId}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final body = <String, dynamic>{};
     if (overrideUrl != null) body['override_url'] = overrideUrl;
     if (overrideHeaders != null) body['override_headers'] = overrideHeaders;
@@ -349,6 +368,7 @@ class ApiService {
     String workspaceId,
     Map<String, dynamic> requestData,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/trace/quick-execute'),
       headers: await _getHeaders(),
@@ -359,6 +379,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getRequestById(String workspaceId, String requestId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/requests/$requestId'),
       headers: await _getHeaders(),
@@ -367,6 +388,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> updateRequest(String workspaceId, String requestId, Map<String, dynamic> updates) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId/requests/$requestId'),
       headers: await _getHeaders(),
@@ -376,6 +398,7 @@ class ApiService {
   }
 
   Future<void> deleteRequest(String workspaceId, String requestId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/requests/$requestId'),
       headers: await _getHeaders(),
@@ -384,6 +407,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getRequestHistory(String workspaceId, String requestId, {int limit = 50, int offset = 0}) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/requests/$requestId/history?limit=$limit&offset=$offset'),
       headers: await _getHeaders(),
@@ -394,6 +418,7 @@ class ApiService {
   // ==================== MONITORING ENDPOINTS ====================
   
   Future<Map<String, dynamic>> getDashboard(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/monitoring/dashboard'),
       headers: await _getHeaders(),
@@ -403,6 +428,7 @@ class ApiService {
   }
   
   Future<Map<String, dynamic>> getMetrics(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/monitoring/metrics'),
       headers: await _getHeaders(),
@@ -414,6 +440,7 @@ class ApiService {
   // ==================== GOVERNANCE ENDPOINTS ====================
   
   Future<List<dynamic>> getGovernancePolicies(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/governance/policies'),
       headers: await _getHeaders(),
@@ -428,6 +455,7 @@ class ApiService {
     String description,
     String type,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/governance/policies'),
       headers: await _getHeaders(),
@@ -445,6 +473,7 @@ class ApiService {
     String policyId,
     Map<String, dynamic> updates,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId/governance/policies/$policyId'),
       headers: await _getHeaders(),
@@ -454,6 +483,7 @@ class ApiService {
   }
 
   Future<void> deleteGovernancePolicy(String workspaceId, String policyId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/governance/policies/$policyId'),
       headers: await _getHeaders(),
@@ -488,6 +518,7 @@ class ApiService {
 // ==================== MONITORING ====================
 
   Future<Map<String, dynamic>> getTopology(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/monitoring/topology'),
       headers: await _getHeaders(),
@@ -498,6 +529,7 @@ class ApiService {
 // ==================== TRACING ====================
 
   Future<Map<String, dynamic>> getTraces(String workspaceId, {int page = 1, int limit = 50}) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/traces?page=$page&limit=$limit'),
       headers: await _getHeaders(),
@@ -510,6 +542,7 @@ class ApiService {
     String workspaceId,
     String traceId,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/traces/$traceId'),
       headers: await _getHeaders(),
@@ -523,6 +556,7 @@ class ApiService {
     String workspaceId,
     Map<String, dynamic> replayData,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/replays'),
       headers: await _getHeaders(),
@@ -534,6 +568,7 @@ class ApiService {
 
   // CORRECT: This returns the JSON response from your Go backend
   Future<Map<String, dynamic>> executeReplay(String workspaceId, String replayId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/replays/$replayId/execute'),
       headers: await _getHeaders(),
@@ -547,6 +582,7 @@ class ApiService {
 // ==================== MOCKS ====================
 
   Future<List<dynamic>> getMocks(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/mocks'),
       headers: await _getHeaders(),
@@ -560,6 +596,7 @@ class ApiService {
     String workspaceId,
     String traceId,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/mocks/generate'),
       headers: await _getHeaders(),
@@ -573,6 +610,7 @@ class ApiService {
     String mockId,
     Map<String, dynamic> updates,
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId/mocks/$mockId'),
       headers: await _getHeaders(),
@@ -581,6 +619,7 @@ class ApiService {
   }
 
   Future<void> deleteMock(String workspaceId, String mockId) async {
+    _requireValidWorkspaceId(workspaceId);
     await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/mocks/$mockId'),
       headers: await _getHeaders(),
@@ -590,6 +629,7 @@ class ApiService {
   // ==================== ENVIRONMENT ENDPOINTS ====================
 
   Future<List<dynamic>> getEnvironments(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments'),
       headers: await _getHeaders(),
@@ -604,6 +644,7 @@ class ApiService {
     String type,
     {String? description, bool isActive = true}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments'),
       headers: await _getHeaders(),
@@ -622,6 +663,7 @@ class ApiService {
     String environmentId,
     {String? name, String? type, String? description, bool? isActive}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name;
     if (type != null) updates['type'] = type;
@@ -637,6 +679,7 @@ class ApiService {
   }
 
   Future<void> deleteEnvironment(String workspaceId, String environmentId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments/$environmentId'),
       headers: await _getHeaders(),
@@ -645,6 +688,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getEnvironmentVariables(String workspaceId, String environmentId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments/$environmentId/variables'),
       headers: await _getHeaders(),
@@ -659,6 +703,7 @@ class ApiService {
     String value,
     {String type = 'string', String? description}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments/$environmentId/variables'),
       headers: await _getHeaders(),
@@ -678,6 +723,7 @@ class ApiService {
     String variableId,
     {String? key, String? value, String? type, String? description}
   ) async {
+    _requireValidWorkspaceId(workspaceId);
     final updates = <String, dynamic>{};
     if (key != null) updates['key'] = key;
     if (value != null) updates['value'] = value;
@@ -693,6 +739,7 @@ class ApiService {
   }
 
   Future<void> deleteEnvironmentVariable(String workspaceId, String environmentId, String variableId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/environments/$environmentId/variables/$variableId'),
       headers: await _getHeaders(),
@@ -703,6 +750,7 @@ class ApiService {
   // ==================== REPLAY ENDPOINTS ====================
 
   Future<Map<String, dynamic>> getReplay(String workspaceId, String replayId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/replays/$replayId'),
       headers: await _getHeaders(),
@@ -711,6 +759,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getReplayResults(String workspaceId, String replayId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/replays/$replayId/results'),
       headers: await _getHeaders(),
@@ -721,6 +770,7 @@ class ApiService {
   // ==================== SCHEMA VALIDATOR ENDPOINTS ====================
 
   Future<Map<String, dynamic>> validateSchema(String workspaceId, Map<String, dynamic> schemaData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/schema/validate'),
       headers: await _getHeaders(),
@@ -732,6 +782,7 @@ class ApiService {
   // ==================== TEST DATA GENERATOR ENDPOINTS ====================
 
   Future<Map<String, dynamic>> generateTestData(String workspaceId, Map<String, dynamic> schema) async {
+  _requireValidWorkspaceId(workspaceId);
   final response = await http.post(
     Uri.parse('$baseUrl/workspaces/$workspaceId/test-data/generate'), 
     headers: await _getHeaders(),
@@ -745,6 +796,7 @@ class ApiService {
   // ==================== PII MASKER ENDPOINTS ====================
 
   Future<Map<String, dynamic>> maskPII(String workspaceId, Map<String, dynamic> data) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/pii/mask'),
       headers: await _getHeaders(),
@@ -756,6 +808,7 @@ class ApiService {
   // ==================== ALERT ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createAlertRule(String workspaceId, Map<String, dynamic> ruleData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/alerts/rules'),
       headers: await _getHeaders(),
@@ -765,6 +818,7 @@ class ApiService {
   }
 
   Future<List<dynamic>> getActiveAlerts(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/alerts/active'),
       headers: await _getHeaders(),
@@ -774,6 +828,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> acknowledgeAlert(String workspaceId, String alertId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/alerts/$alertId/acknowledge'),
       headers: await _getHeaders(),
@@ -784,6 +839,7 @@ class ApiService {
   // ==================== AUDIT ENDPOINTS ====================
 
   Future<List<dynamic>> getAuditLogs(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/audit/logs'),
       headers: await _getHeaders(),
@@ -793,6 +849,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> detectAnomalies(String workspaceId, String targetUserId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/audit/anomalies/$targetUserId'),
       headers: await _getHeaders(),
@@ -803,6 +860,7 @@ class ApiService {
   // ==================== FAILURE INJECTION ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createFailureInjectionRule(String workspaceId, Map<String, dynamic> ruleData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/failure-injection/rules'),
       headers: await _getHeaders(),
@@ -814,6 +872,7 @@ class ApiService {
   // ==================== MUTATION ENDPOINTS ====================
 
   Future<Map<String, dynamic>> applyMutations(String workspaceId, Map<String, dynamic> mutationData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/mutations/apply'),
       headers: await _getHeaders(),
@@ -825,6 +884,7 @@ class ApiService {
   // ==================== PERCENTILE CALCULATOR ENDPOINTS ====================
 
   Future<Map<String, dynamic>> calculatePercentiles(String workspaceId, Map<String, dynamic> percentileData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/percentiles/calculate'),
       headers: await _getHeaders(),
@@ -836,6 +896,7 @@ class ApiService {
   // ==================== TRACING CONFIG ENDPOINTS ====================
 
   Future<List<dynamic>> getTracingConfigs(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs'),
       headers: await _getHeaders(),
@@ -845,6 +906,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> createTracingConfig(String workspaceId, Map<String, dynamic> configData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs'),
       headers: await _getHeaders(),
@@ -854,6 +916,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getTracingConfigById(String workspaceId, String configId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs/$configId'),
       headers: await _getHeaders(),
@@ -862,6 +925,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> updateTracingConfig(String workspaceId, String configId, Map<String, dynamic> updates) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.put(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs/$configId'),
       headers: await _getHeaders(),
@@ -871,6 +935,7 @@ class ApiService {
   }
 
   Future<void> deleteTracingConfig(String workspaceId, String configId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.delete(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs/$configId'),
       headers: await _getHeaders(),
@@ -879,6 +944,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> toggleTracingConfig(String workspaceId, String configId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs/$configId/toggle'),
       headers: await _getHeaders(),
@@ -887,6 +953,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> bulkToggleTracingConfigs(String workspaceId, Map<String, dynamic> toggleData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/configs/bulk-toggle'),
       headers: await _getHeaders(),
@@ -896,6 +963,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getTracingConfigByServiceName(String workspaceId, String serviceName) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/services/$serviceName'),
       headers: await _getHeaders(),
@@ -904,6 +972,7 @@ class ApiService {
   }
 
   Future<List<dynamic>> getEnabledTracingServices(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/enabled-services'),
       headers: await _getHeaders(),
@@ -913,6 +982,7 @@ class ApiService {
   }
 
   Future<List<dynamic>> getDisabledTracingServices(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/disabled-services'),
       headers: await _getHeaders(),
@@ -922,6 +992,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> checkTracingEnabled(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/tracing/check'),
       headers: await _getHeaders(),
@@ -932,6 +1003,7 @@ class ApiService {
   // ==================== WATERFALL ENDPOINTS ====================
 
   Future<Map<String, dynamic>> getWaterfall(String workspaceId, String traceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/traces/$traceId/waterfall'),
       headers: await _getHeaders(),
@@ -942,6 +1014,7 @@ class ApiService {
   // ==================== LOAD TEST ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createLoadTest(String workspaceId, Map<String, dynamic> loadTestData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/load-tests'),
       headers: await _getHeaders(),
@@ -953,6 +1026,7 @@ class ApiService {
   // ==================== SECRETS ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createSecret(String workspaceId, Map<String, dynamic> secretData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/secrets'),
       headers: await _getHeaders(),
@@ -962,6 +1036,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getSecretValue(String workspaceId, String secretId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/secrets/$secretId'),
       headers: await _getHeaders(),
@@ -970,6 +1045,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> rotateSecret(String workspaceId, String secretId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/secrets/$secretId/rotate'),
       headers: await _getHeaders(),
@@ -980,6 +1056,7 @@ class ApiService {
   // ==================== WEBHOOK ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createWebhook(String workspaceId, Map<String, dynamic> webhookData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/webhooks'),
       headers: await _getHeaders(),
@@ -989,6 +1066,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> triggerWebhook(String workspaceId, Map<String, dynamic> triggerData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/webhooks/trigger'),
       headers: await _getHeaders(),
@@ -1000,6 +1078,7 @@ class ApiService {
   // ==================== WORKFLOW ENDPOINTS ====================
 
   Future<Map<String, dynamic>> createWorkflow(String workspaceId, Map<String, dynamic> workflowData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/workflows'),
       headers: await _getHeaders(),
@@ -1009,6 +1088,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> executeWorkflow(String workspaceId, String workflowId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/workflows/$workflowId/execute'),
       headers: await _getHeaders(),
@@ -1019,6 +1099,7 @@ class ApiService {
   // ==================== REPLAY ENDPOINTS (ADDITIONAL) ====================
 
   Future<List<dynamic>> getReplays(String workspaceId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/replays'),
       headers: await _getHeaders(),
@@ -1030,6 +1111,7 @@ class ApiService {
   // ==================== COLLECTION REQUESTS ENDPOINTS ====================
 
   Future<List<dynamic>> getCollectionRequests(String workspaceId, String collectionId) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.get(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/$collectionId/requests'),
       headers: await _getHeaders(),
@@ -1039,6 +1121,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> importCollection(String workspaceId, Map<String, dynamic> jsonData) async {
+    _requireValidWorkspaceId(workspaceId);
     final response = await http.post(
       Uri.parse('$baseUrl/workspaces/$workspaceId/collections/import/postman'),
       headers: await _getHeaders(),

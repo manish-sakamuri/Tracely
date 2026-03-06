@@ -35,7 +35,11 @@ class WorkspaceProvider with ChangeNotifier {
     try {
       _workspaces = await _apiService.getWorkspaces();
       if (_workspaces.isNotEmpty && _selectedWorkspaceId == null) {
-        _selectedWorkspaceId = _workspaces[0]['id'].toString();
+        final id = _workspaces[0]['id']?.toString();
+        // Only set if we have a valid UUID-like value (avoid "null" or empty)
+        if (id != null && id.trim().isNotEmpty && id != 'null') {
+          _selectedWorkspaceId = id;
+        }
       }
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');

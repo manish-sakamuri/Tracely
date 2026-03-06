@@ -82,10 +82,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await workspaceProvider.loadWorkspaces();
     }
     
-    if (workspaceProvider.selectedWorkspaceId != null) {
-      final wsId = workspaceProvider.selectedWorkspaceId!;
+    final wsId = workspaceProvider.selectedWorkspaceId;
+    final validWsId = wsId != null && wsId.trim().isNotEmpty && wsId != 'null';
+    if (validWsId) {
       await Future.wait([
-        traceProvider.fetchTraces(wsId),
+        traceProvider.fetchTraces(wsId!),
         dashboardProvider.fullRefresh(wsId),
       ]);
     }
@@ -521,8 +522,52 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _hasValidWorkspace(WorkspaceProvider workspaceProvider) {
+    final id = workspaceProvider.selectedWorkspaceId;
+    return id != null && id.trim().isNotEmpty && id != 'null';
+  }
+
+  Widget _buildNoWorkspaceState(WorkspaceProvider workspaceProvider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.workspaces_outlined, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Select a workspace',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              workspaceProvider.workspaces.isEmpty
+                  ? 'Create a workspace first, or wait for it to load.'
+                  : 'Choose a workspace from the dropdown above to use this feature.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 24),
+            if (workspaceProvider.workspaces.isEmpty)
+              TextButton.icon(
+                onPressed: () => setState(() => _selectedNav = 5),
+                icon: const Icon(Icons.add),
+                label: const Text('Go to Workspaces'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCurrentScreen(WorkspaceProvider workspaceProvider, TraceProvider traceProvider) {
     final wsId = workspaceProvider.selectedWorkspaceId;
+    final hasValidWorkspace = _hasValidWorkspace(workspaceProvider);
+    final needsWorkspace = _selectedNav != 5 && _selectedNav != 7;
+    if (needsWorkspace && !hasValidWorkspace) {
+      return _buildNoWorkspaceState(workspaceProvider);
+    }
     final workspace = workspaceProvider.selectedWorkspace ?? {'id': wsId ?? '', 'name': 'Default'};
 
     switch (_selectedNav) {
