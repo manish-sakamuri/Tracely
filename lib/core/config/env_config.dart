@@ -24,10 +24,12 @@ class EnvConfig {
   static bool get hasGoogleAuthApi =>
       googleAuthApi != null &&
       googleAuthApi!.isNotEmpty &&
-      !googleAuthApi!.startsWith('http://localhost');
+      !googleAuthApi!.startsWith('http://localhost') &&
+      !googleAuthApi!.contains('YOUR-APP');
 
   static bool get hasGitHubAuthApi =>
       githubAuthApi != null &&
       githubAuthApi!.isNotEmpty &&
-      !githubAuthApi!.startsWith('http://localhost');
+      !githubAuthApi!.startsWith('http://localhost') &&
+      !githubAuthApi!.contains('YOUR-APP');
 }

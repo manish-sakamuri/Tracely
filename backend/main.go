@@ -141,11 +141,20 @@ func setupRouter(cfg *config.Config, db *gorm.DB, authService *services.AuthServ
 		ExposeHeaders:    []string{"Content-Length", "X-Trace-ID"},
 		AllowCredentials: true,
 		AllowOriginFunc: func(origin string) bool {
-			// allow any localhost port dynamically
-			return origin == "http://localhost" ||
+			// Allow any localhost port dynamically (development)
+			if origin == "http://localhost" ||
 				origin == "http://127.0.0.1" ||
 				strings.HasPrefix(origin, "http://localhost:") ||
-				strings.HasPrefix(origin, "http://127.0.0.1:")
+				strings.HasPrefix(origin, "http://127.0.0.1:") {
+				return true
+			}
+			// Allow configured production origins from CORS_ORIGINS env
+			for _, allowed := range cfg.CORSOrigins {
+				if strings.TrimSpace(allowed) == origin {
+					return true
+				}
+			}
+			return false
 		},
 		MaxAge: 12 * time.Hour,
 	}
