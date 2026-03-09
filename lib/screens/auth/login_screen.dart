@@ -11,6 +11,9 @@ import 'package:tracely/core/config/env_config.dart';
 import 'package:tracely/screens/auth/signup_screen.dart';
 import 'package:tracely/services/api_service.dart';
 
+// Platform-aware web helper (no-op on mobile, uses dart:html on web)
+import 'package:tracely/core/config/web_helper.dart';
+
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSuccess;
 
@@ -37,6 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _appLinks = AppLinks();
     _listenForDeepLinks();
+    // On web, check if we returned from a GitHub OAuth callback
+    if (kIsWeb) _checkWebCallback();
   }
 
   @override
@@ -47,14 +52,39 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Listen for incoming deep links (used for GitHub OAuth callback).
+  /// Listen for incoming deep links (used for GitHub OAuth callback on mobile).
   void _listenForDeepLinks() {
+    if (kIsWeb) return; // Web uses _checkWebCallback instead
     _linkSubscription = _appLinks.uriLinkStream.listen((Uri uri) {
       debugPrint('[Login] Deep link received: $uri');
       if (uri.scheme == 'tracely' && uri.path.contains('github/callback')) {
         _handleGitHubDeepLink(uri);
       }
     });
+  }
+
+  /// On web, check if the URL contains GitHub callback tokens in the hash.
+  void _checkWebCallback() {
+    try {
+      final fragment = getWindowLocationHash(); // e.g. #/auth/callback?access_token=...
+      if (fragment.contains('access_token')) {
+        // Parse the fragment as if it were a query string
+        final queryPart = fragment.contains('?') ? fragment.split('?').last : fragment.replaceFirst('#', '');
+        final params = Uri.splitQueryString(queryPart);
+        final accessToken = params['access_token'];
+        final refreshToken = params['refresh_token'];
+        if (accessToken != null && refreshToken != null) {
+          debugPrint('[Login] Web callback tokens found, logging in...');
+          ApiService().saveTokens(accessToken, refreshToken).then((_) {
+            // Clear the hash so tokens don't persist in URL
+            setWindowLocationHash('');
+            if (mounted) widget.onLoginSuccess?.call();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[Login] Web callback check error: $e');
+    }
   }
 
   /// Process the deep link from GitHub OAuth callback.
@@ -123,8 +153,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final auth = await account.authentication;
       final idToken = auth.idToken;
 
-      if (idToken == null) {
-        throw Exception('Google sign-in failed: missing ID token');
+      if (idToken == null || idToken.isEmpty) {
+        // On web, GoogleSignIn may not return an idToken.
+        // Show a user-friendly message instead of crashing.
+        throw Exception(
+          kIsWeb
+            ? 'Google Sign-In is not supported on the web version. Please use Email/Password or GitHub login.'
+            : 'Google sign-in failed: could not retrieve ID token. Please try again.',
+        );
       }
 
       await ApiService().googleAuth(idToken);
@@ -168,10 +204,18 @@ class _LoginScreenState extends State<LoginScreen> {
           stateBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       debugPrint('[Login] GitHub OAuth state: $state');
 
+      // On web, pass the current page URL as redirect_uri so the backend
+      // redirects back here with tokens instead of using a deep link.
+      String callbackWithRedirect = backendCallbackUrl;
+      if (kIsWeb) {
+        final webOrigin = getWindowLocationOrigin();
+        callbackWithRedirect += '?redirect_uri=${Uri.encodeComponent(webOrigin)}';
+      }
+
       final authUrl = Uri.parse(
         'https://github.com/login/oauth/authorize'
         '?client_id=$clientId'
-        '&redirect_uri=${Uri.encodeComponent(backendCallbackUrl)}'
+        '&redirect_uri=${Uri.encodeComponent(callbackWithRedirect)}'
         '&scope=user:email'
         '&state=$state',
       );

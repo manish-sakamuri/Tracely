@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http" // Standard Go HTTP library – provides status codes like 200, 400, 401
 	"net/url"
+	"strings"
 
 	"github.com/gin-gonic/gin" // Gin is the web framework used for routing and request handling
 )
@@ -421,7 +422,32 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 		return
 	}
 
-	// Redirect to the Android app via deep link with tokens
+	// Redirect with tokens — detect platform:
+	// If the request includes a "redirect_uri" query parameter pointing to
+	// a web URL, redirect there. Otherwise fall back to the Android deep link.
+	redirectURI := c.Query("redirect_uri")
+	if redirectURI == "" {
+		// Default to the first configured CORS origin (the web app)
+		if len(h.cfg.CORSOrigins) > 0 && h.cfg.CORSOrigins[0] != "" {
+			redirectURI = strings.TrimSpace(h.cfg.CORSOrigins[0])
+		}
+	}
+
+	if redirectURI != "" && (strings.HasPrefix(redirectURI, "http://") || strings.HasPrefix(redirectURI, "https://")) {
+		// Web redirect: pass tokens as hash fragment so JS can read them
+		webRedirect := fmt.Sprintf(
+			"%s/#/auth/callback?access_token=%s&refresh_token=%s&user_id=%s&email=%s",
+			strings.TrimRight(redirectURI, "/"),
+			url.QueryEscape(token.AccessToken),
+			url.QueryEscape(token.RefreshToken),
+			url.QueryEscape(user.ID.String()),
+			url.QueryEscape(user.Email),
+		)
+		c.Redirect(http.StatusTemporaryRedirect, webRedirect)
+		return
+	}
+
+	// Native app deep link fallback
 	redirectURL := fmt.Sprintf(
 		"tracely://auth/github/callback?access_token=%s&refresh_token=%s&user_id=%s&email=%s",
 		url.QueryEscape(token.AccessToken),
