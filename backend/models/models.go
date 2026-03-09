@@ -98,6 +98,10 @@ type Trace struct {
 	ID              uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"trace_id"`
 	WorkspaceID     uuid.UUID      `gorm:"type:uuid;not null" json:"workspace_id"`
 	ServiceName     string         `gorm:"not null" json:"service_name"`
+	HttpMethod      string         `json:"http_method"`
+	Endpoint        string         `json:"endpoint"`
+	StatusCode      int            `json:"status_code"`
+	Source          string         `gorm:"default:'api'" json:"source"` // api, test_run
 	SpanCount       int            `gorm:"default:0" json:"span_count"`
 	TotalDurationMs float64        `json:"total_duration_ms"`
 	StartTime       time.Time      `gorm:"not null" json:"start_time"`

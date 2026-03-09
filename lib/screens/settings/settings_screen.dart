@@ -90,10 +90,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _sendTestNotification() async {
     try {
-      await ApiService().sendTestNotification();
+      final result = await ApiService().sendTestNotification();
       if (mounted) {
+        final message = result['message'] ?? 'Test notification sent!';
+        final success = result['success'] ?? false;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Test notification sent!')),
+          SnackBar(
+            content: Text(message.toString()),
+            backgroundColor: success == true ? Colors.green : Colors.orange,
+          ),
         );
       }
     } catch (e) {
@@ -155,8 +160,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingsTile(
                     icon: Icons.send_rounded,
                     title: 'Send Test Notification',
-                    subtitle: 'Verify notification delivery',
-                    onTap: _sendTestNotification,
+                    subtitle: _notificationsEnabled
+                        ? 'Verify notification delivery'
+                        : 'Enable Push Notifications first',
+                    onTap: _notificationsEnabled ? _sendTestNotification : null,
                   ),
                 ],
               ),

@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"backend/middlewares"
+	"backend/services"
 	"net/http"
 	"strconv"
 	"time"
-	"backend/middlewares"
-	"backend/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -68,8 +68,14 @@ func (h *TraceHandler) GetTraceDetails(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"trace_id": trace.ID,
-		"spans":    spans,
+		"trace_id":          trace.ID,
+		"total_duration_ms": trace.TotalDurationMs,
+		"start_time":        trace.StartTime,
+		"end_time":          trace.EndTime,
+		"status":            trace.Status,
+		"service_name":      trace.ServiceName,
+		"span_count":        trace.SpanCount,
+		"spans":             spans,
 	})
 }
 

@@ -67,7 +67,7 @@ func main() {
 	mockHandler := handlers.NewMockHandler(mockService)
 	environmentHandler := handlers.NewEnvironmentHandler(environmentService)
 	alertHandler := handlers.NewAlertHandler(alertingService)
-	testRunHandler := handlers.NewTestRunHandler(testRunService, userLogService)
+	testRunHandler := handlers.NewTestRunHandler(testRunService, userLogService, db)
 	userHandler := handlers.NewUserHandler(db, userLogService)
 	notificationHandler := handlers.NewNotificationHandler(db, userLogService)
 
@@ -151,7 +151,8 @@ func setupRouter(cfg *config.Config, db *gorm.DB, authService *services.AuthServ
 	}
 	router.Use(cors.New(corsConfig))
 
-	// Global middlewares
+	// Global middlewares (order matters: timer first to measure full lifecycle)
+	router.Use(middlewares.ResponseTimer())
 	router.Use(middlewares.RequestLogger())
 	router.Use(middlewares.ErrorHandler())
 	router.Use(middlewares.TraceID())
@@ -198,6 +199,7 @@ func setupRouter(cfg *config.Config, db *gorm.DB, authService *services.AuthServ
 				workspaces.POST("", workspaceHandler.Create)
 				workspaces.GET("/:workspace_id", workspaceHandler.GetByID)
 				workspaces.PUT("/:workspace_id", workspaceHandler.Update)
+				workspaces.PATCH("/:workspace_id", workspaceHandler.Update)
 				workspaces.DELETE("/:workspace_id", workspaceHandler.Delete)
 
 				// Collection routes
@@ -205,12 +207,14 @@ func setupRouter(cfg *config.Config, db *gorm.DB, authService *services.AuthServ
 				workspaces.POST("/:workspace_id/collections", collectionHandler.Create)
 				workspaces.GET("/:workspace_id/collections/:collection_id", collectionHandler.GetByID)
 				workspaces.PUT("/:workspace_id/collections/:collection_id", collectionHandler.Update)
+				workspaces.PATCH("/:workspace_id/collections/:collection_id", collectionHandler.Update)
 				workspaces.DELETE("/:workspace_id/collections/:collection_id", collectionHandler.Delete)
 
 				// Request routes
 				workspaces.POST("/:workspace_id/collections/:collection_id/requests", requestHandler.Create)
 				workspaces.GET("/:workspace_id/requests/:request_id", requestHandler.GetByID)
 				workspaces.PUT("/:workspace_id/requests/:request_id", requestHandler.Update)
+				workspaces.PATCH("/:workspace_id/requests/:request_id", requestHandler.Update)
 				workspaces.DELETE("/:workspace_id/requests/:request_id", requestHandler.Delete)
 				workspaces.POST("/:workspace_id/requests/:request_id/execute", requestHandler.Execute)
 				workspaces.GET("/:workspace_id/requests/:request_id/history", requestHandler.GetHistory)

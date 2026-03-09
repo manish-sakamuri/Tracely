@@ -28,7 +28,7 @@ func NewNotificationHandler(db *gorm.DB, uls *services.UserLogService) *Notifica
 }
 
 // TestNotification handles POST /notifications/test.
-// It simulates a push notification by creating a user log entry.
+// Checks user settings (notifications_enabled), device token, then responds.
 func (h *NotificationHandler) TestNotification(c *gin.Context) {
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
@@ -41,12 +41,71 @@ func (h *NotificationHandler) TestNotification(c *gin.Context) {
 		return
 	}
 
-	// Create a test notification log entry
-	_ = h.userLogService.CreateLog(userID, "INFO", "Test notification triggered successfully")
+	// ── 1. Check if notifications are enabled in user settings ──
+	var settings models.UserSettings
+	notificationsEnabled := true // default
+	if err := h.db.Where("user_id = ?", userID).First(&settings).Error; err == nil {
+		notificationsEnabled = settings.NotificationsEnabled
+	}
+
+	if !notificationsEnabled {
+		_ = h.userLogService.CreateLogWithMetadata(userID, "WARN",
+			"Test notification blocked: notifications disabled",
+			`{"notifications_enabled":false,"push_sent":false,"reason":"NOTIFICATIONS_DISABLED"}`,
+		)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":   false,
+			"push_sent": false,
+			"mode":      "log_only",
+			"reason":    "NOTIFICATIONS_DISABLED",
+			"message":   "Push notifications are disabled. Enable them in Settings first.",
+		})
+		return
+	}
+
+	// ── 2. Check if user has a registered device token ──
+	var deviceToken models.DeviceToken
+	hasToken := h.db.Where("user_id = ?", userID).First(&deviceToken).Error == nil
+
+	if !hasToken {
+		_ = h.userLogService.CreateLogWithMetadata(userID, "WARN",
+			"Test notification: no device token registered",
+			`{"notifications_enabled":true,"has_device_token":false,"push_sent":false,"reason":"NO_DEVICE_TOKEN"}`,
+		)
+		c.JSON(http.StatusConflict, gin.H{
+			"success":   false,
+			"push_sent": false,
+			"mode":      "log_only",
+			"reason":    "NO_DEVICE_TOKEN",
+			"message":   "No device token registered. Open the app on your phone to register automatically.",
+		})
+		return
+	}
+
+	// ── 3. Token exists — attempt push (simulated for now) ──
+	metadata := fmt.Sprintf(
+		`{"notifications_enabled":true,"has_device_token":true,"push_sent":true,"platform":"%s","token_prefix":"%s"}`,
+		deviceToken.Platform,
+		deviceToken.Token[:min(8, len(deviceToken.Token))]+"...",
+	)
+	if err := h.userLogService.CreateLogWithMetadata(userID, "INFO",
+		"Test notification sent successfully",
+		metadata,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success":   false,
+			"push_sent": false,
+			"mode":      "log_only",
+			"message":   "Failed to log notification: " + err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Test notification sent. Check your logs for confirmation.",
+		"success":   true,
+		"push_sent": true,
+		"mode":      "push",
+		"message":   "Test notification sent to your " + deviceToken.Platform + " device.",
 	})
 }
 
@@ -57,7 +116,6 @@ type RegisterDeviceTokenRequest struct {
 }
 
 // RegisterDeviceToken handles POST /notifications/device-token.
-// It saves or updates a device token for push notifications.
 func (h *NotificationHandler) RegisterDeviceToken(c *gin.Context) {
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
@@ -80,7 +138,6 @@ func (h *NotificationHandler) RegisterDeviceToken(c *gin.Context) {
 	var existing models.DeviceToken
 	result := h.db.Where("token = ?", req.Token).First(&existing)
 	if result.Error != nil {
-		// Create new token
 		token := models.DeviceToken{
 			UserID:   userID,
 			Token:    req.Token,
@@ -91,17 +148,27 @@ func (h *NotificationHandler) RegisterDeviceToken(c *gin.Context) {
 			return
 		}
 	} else {
-		// Update existing token's user and platform
 		h.db.Model(&existing).Updates(map[string]interface{}{
 			"user_id":  userID,
 			"platform": req.Platform,
 		})
 	}
 
-	_ = h.userLogService.CreateLog(userID, "INFO", "Device token registered for "+req.Platform)
+	_ = h.userLogService.CreateLogWithMetadata(userID, "INFO",
+		"Device token registered for "+req.Platform,
+		fmt.Sprintf(`{"platform":"%s","token_prefix":"%s"}`, req.Platform, req.Token[:min(8, len(req.Token))]+"..."),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Device token registered",
 	})
+}
+
+// min returns the smaller of two ints.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

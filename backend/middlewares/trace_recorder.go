@@ -1,11 +1,14 @@
 // Package middlewares – trace_recorder.go automatically records a Trace and
-// root Span for every authenticated API request. This populates the Traces
-// screen with real data without requiring manual trace creation.
+// root Span for every authenticated API request.
+//
+// SAFETY: All gin.Context values are captured into local variables BEFORE
+// the goroutine starts. gin.Context must never be accessed inside a goroutine.
 package middlewares
 
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"backend/models"
@@ -15,17 +18,74 @@ import (
 	"gorm.io/gorm"
 )
 
-// TraceRecorder creates a Gin middleware that automatically records a Trace
-// and root Span for every API request that passes through protected routes.
-// It captures method, endpoint, status code, duration, and workspace ID.
+// TraceRecorder creates a Gin middleware that records a Trace and root Span
+// for every API request, storing real HTTP method, path, and status code.
+//
+// Internal read-only API calls (fetching workspaces, traces, collections,
+// settings, etc.) are excluded because they add noise — the user wants to
+// see traces of actual operations like test executions and mutations.
 func TraceRecorder(db *gorm.DB) gin.HandlerFunc {
+	// Paths that are pure data-fetch / admin. Recording these creates
+	// the "all GET 200" noise the user sees on the Traces page.
+	excludePrefixes := []string{
+		"/api/v1/workspaces",    // listing workspaces
+		"/api/v1/users",         // user settings / profile
+		"/api/v1/notifications", // notification management
+	}
+	// Exact paths to exclude
+	excludeExact := map[string]bool{
+		"/health": true,
+	}
+
 	return func(c *gin.Context) {
+		endpoint := c.Request.URL.Path
+		method := c.Request.Method
+
+		// Skip pure reads — they are internal app fetches, not user-initiated operations.
+		// Only exclude GET requests; mutations (POST/PUT/DELETE/PATCH) are always recorded.
+		if method == "GET" {
+			if excludeExact[endpoint] {
+				c.Next()
+				return
+			}
+			for _, prefix := range excludePrefixes {
+				if len(endpoint) >= len(prefix) && endpoint[:len(prefix)] == prefix {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		// Also skip the POST /test-runs endpoint itself — the test run handler
+		// creates its own trace with the actual external API status code.
+		if method == "POST" && strings.HasSuffix(endpoint, "/test-runs") {
+			c.Next()
+			return
+		}
+
 		startTime := time.Now()
 
-		// Let the handler execute
 		c.Next()
 
-		// Record after handler finishes — don't block request
+		// ── Capture all values from gin.Context BEFORE the goroutine ──
+		endTime := time.Now()
+		durationMs := float64(endTime.Sub(startTime).Milliseconds())
+		statusCode := c.Writer.Status()
+		method = c.Request.Method
+		endpoint = c.Request.URL.Path
+
+		userIDStr, exists := c.Get("user_id")
+		if !exists {
+			return
+		}
+		userID, err := uuid.Parse(fmt.Sprintf("%v", userIDStr))
+		if err != nil {
+			return
+		}
+
+		wsParam := c.Param("workspace_id")
+
+		// ── Goroutine: only uses captured primitives ──
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -33,53 +93,37 @@ func TraceRecorder(db *gorm.DB) gin.HandlerFunc {
 				}
 			}()
 
-			endTime := time.Now()
-			durationMs := float64(endTime.Sub(startTime).Milliseconds())
-			statusCode := c.Writer.Status()
-			method := c.Request.Method
-			endpoint := c.Request.URL.Path
-
-			// Get user ID from context (set by auth middleware)
-			userIDStr, exists := c.Get("user_id")
-			if !exists {
-				return // Skip unauthenticated requests
-			}
-			userID, err := uuid.Parse(fmt.Sprintf("%v", userIDStr))
-			if err != nil {
-				return
-			}
-
-			// Try to get workspace ID from route params
 			var workspaceID uuid.UUID
-			wsParam := c.Param("workspace_id")
 			if wsParam != "" {
 				parsed, err := uuid.Parse(wsParam)
 				if err == nil {
 					workspaceID = parsed
 				}
 			}
-			// If no workspace in route, find user's first workspace
 			if workspaceID == uuid.Nil {
 				var member models.WorkspaceMember
 				if err := db.Where("user_id = ?", userID).First(&member).Error; err == nil {
 					workspaceID = member.WorkspaceID
 				} else {
-					return // No workspace — can't create trace
+					return
 				}
 			}
 
-			// Determine status
+			// Derive status from real HTTP status code
 			status := "success"
 			if statusCode >= 400 {
 				status = "error"
 			}
 
-			// Create the trace (matches models.Trace schema exactly)
 			traceID := uuid.New()
 			trace := models.Trace{
 				ID:              traceID,
 				WorkspaceID:     workspaceID,
 				ServiceName:     "tracely-api",
+				HttpMethod:      method,
+				Endpoint:        endpoint,
+				StatusCode:      statusCode,
+				Source:          "api",
 				SpanCount:       1,
 				TotalDurationMs: durationMs,
 				StartTime:       startTime,
@@ -92,7 +136,6 @@ func TraceRecorder(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 
-			// Create root span (matches models.Span schema exactly)
 			span := models.Span{
 				ID:            uuid.New(),
 				TraceID:       traceID,
@@ -100,7 +143,7 @@ func TraceRecorder(db *gorm.DB) gin.HandlerFunc {
 				ServiceName:   "tracely-api",
 				StartTime:     startTime,
 				DurationMs:    durationMs,
-				Tags:          "{}",
+				Tags:          fmt.Sprintf(`{"http.method":"%s","http.url":"%s","http.status_code":%d}`, method, endpoint, statusCode),
 				Logs:          "[]",
 				Status:        status,
 			}

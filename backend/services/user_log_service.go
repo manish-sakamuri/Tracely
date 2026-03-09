@@ -6,6 +6,7 @@ package services
 
 import (
 	"backend/models"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -24,12 +25,21 @@ func NewUserLogService(db *gorm.DB) *UserLogService {
 
 // CreateLog inserts a new audit log entry for the specified user.
 func (s *UserLogService) CreateLog(userID uuid.UUID, level, message string) error {
-	log := models.UserLog{
-		UserID:  userID,
-		Level:   level,
-		Message: message,
+	return s.CreateLogWithMetadata(userID, level, message, "{}")
+}
+
+// CreateLogWithMetadata inserts a log entry with structured JSON metadata.
+// The metadata string is validated and normalized before insertion to prevent
+// JSONB SQL errors from empty or malformed strings.
+func (s *UserLogService) CreateLogWithMetadata(userID uuid.UUID, level, message, metadata string) error {
+	metadata = normalizeJSON(metadata)
+	logEntry := models.UserLog{
+		UserID:   userID,
+		Level:    level,
+		Message:  message,
+		Metadata: metadata,
 	}
-	if err := s.db.Create(&log).Error; err != nil {
+	if err := s.db.Create(&logEntry).Error; err != nil {
 		return fmt.Errorf("failed to create user log: %w", err)
 	}
 	return nil
@@ -55,4 +65,16 @@ func (s *UserLogService) GetLogs(userID uuid.UUID, level string, limit, offset i
 	}
 
 	return logs, total, nil
+}
+
+// normalizeJSON ensures a string is valid JSON for JSONB columns.
+// Returns "{}" if the input is empty or invalid JSON.
+func normalizeJSON(s string) string {
+	if s == "" {
+		return "{}"
+	}
+	if json.Valid([]byte(s)) {
+		return s
+	}
+	return "{}"
 }

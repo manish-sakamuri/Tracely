@@ -77,6 +77,11 @@ dist/
 .env
 .env.local
 .env.*.local
+backend/.env
+
+# Firebase / Google services (contains API keys and client IDs)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
 
 # ========================
 # Logs

@@ -63,11 +63,12 @@ class _TracesScreenState extends State<TracesScreen> {
       _traces = rawTraces.map((t) {
         final m = t as Map<String, dynamic>;
         return _TraceItem(
-          method: m['method'] ?? m['operation_name'] ?? 'GET',
-          path: m['service_name'] ?? m['endpoint'] ?? '/unknown',
-          status: m['status_code'] ?? (m['status'] == 'success' ? 200 : 500),
-          durationMs: m['total_duration_ms'] ?? m['duration_ms'] ?? 0,
-          traceId: m['trace_id'] ?? m['id'] ?? '',
+          method: m['http_method'] ?? m['method'] ?? 'GET',
+          path: m['endpoint'] ?? m['service_name'] ?? '/unknown',
+          status: m['status_code'] ?? 0,
+          durationMs: (m['total_duration_ms'] ?? m['duration_ms'] ?? 0).toDouble(),
+          traceId: (m['trace_id'] ?? m['id'] ?? '').toString(),
+          source: m['source'] ?? 'api',
         );
       }).toList();
 
@@ -217,8 +218,9 @@ class _TraceItem {
   final String method;
   final String path;
   final int status;
-  final int durationMs;
+  final double durationMs;
   final String traceId;
+  final String source;
 
   _TraceItem({
     required this.method,
@@ -226,6 +228,7 @@ class _TraceItem {
     required this.status,
     required this.durationMs,
     this.traceId = '',
+    this.source = 'api',
   });
 }
 
@@ -237,11 +240,15 @@ class _TraceListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = trace.status >= 500
-        ? Colors.red
-        : trace.status >= 400
-            ? Colors.orange
-            : Colors.green;
+    final statusColor = trace.status == 0
+        ? Colors.grey
+        : trace.status >= 500
+            ? Colors.red
+            : trace.status >= 400
+                ? Colors.orange
+                : Colors.green;
+
+    final statusLabel = trace.status == 0 ? 'N/A' : '${trace.status}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -276,7 +283,7 @@ class _TraceListItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
-            '${trace.status}',
+            statusLabel,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,

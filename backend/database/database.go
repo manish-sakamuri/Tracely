@@ -94,8 +94,31 @@ func RunMigrations(db *gorm.DB) error {
 	// Create indexes for better performance
 	createIndexes(db)
 
+	// Clean up stale traces that have no status code (recorded before columns were added)
+	cleanupStaleTraces(db)
+
 	log.Println("Database migrations completed successfully")
 	return nil
+}
+
+// cleanupStaleTraces removes old trace records that were recorded before
+// the http_method, endpoint, and status_code columns existed. These rows
+// have status_code = 0 and empty http_method/endpoint, providing no
+// useful information.
+func cleanupStaleTraces(db *gorm.DB) {
+	result := db.Exec("DELETE FROM traces WHERE status_code = 0 OR status_code IS NULL")
+	if result.Error != nil {
+		log.Printf("Warning: could not clean up stale traces: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("Cleaned up %d stale trace records (missing status_code)", result.RowsAffected)
+	}
+	// Also clean up orphaned spans whose trace was deleted
+	result = db.Exec("DELETE FROM spans WHERE trace_id NOT IN (SELECT id FROM traces)")
+	if result.Error != nil {
+		log.Printf("Warning: could not clean up orphaned spans: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("Cleaned up %d orphaned span records", result.RowsAffected)
+	}
 }
 
 func createIndexes(db *gorm.DB) {
