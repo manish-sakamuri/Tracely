@@ -8,6 +8,19 @@ import 'trace_screen.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+// Body modes for request payload
+enum BodyMode { json, formData, raw }
+
+// Simple holder for form‑data key/value controllers
+class _FormFieldItem {
+  final TextEditingController keyController;
+  final TextEditingController valueController;
+
+  _FormFieldItem()
+      : keyController = TextEditingController(),
+        valueController = TextEditingController();
+}
+
 class RequestStudioScreen extends StatefulWidget {
   const RequestStudioScreen({Key? key}) : super(key: key);
 
@@ -19,12 +32,21 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
   final TextEditingController _urlController = TextEditingController();
   final TextEditingController _bearerTokenController = TextEditingController();
   final TextEditingController _jsonBodyController = TextEditingController();
+  final TextEditingController _rawBodyController = TextEditingController();
   
   String _selectedMethod = 'POST'; // Changed to POST for login
   bool _isSending = false;
   bool _isHeadersExpanded = true;
   bool _isBodyExpanded = true;
   bool _isAuthExpanded = true;
+
+  // Body mode selector: JSON / Form Data / Raw
+  BodyMode _bodyMode = BodyMode.json;
+
+  // Simple form‑data key/value editor state
+  List<_FormFieldItem> _formFields = [
+    _FormFieldItem(),
+  ];
 
   final List<String> _httpMethods = [
     'GET',
@@ -35,6 +57,9 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
     'HEAD',
     'OPTIONS',
   ];
+
+  // Body content mode
+  BodyMode get _currentBodyMode => _bodyMode;
 
   // Sample headers
   final Map<String, String> _headers = {
@@ -63,6 +88,11 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
     _urlController.dispose();
     _bearerTokenController.dispose();
     _jsonBodyController.dispose();
+    _rawBodyController.dispose();
+    for (final f in _formFields) {
+      f.keyController.dispose();
+      f.valueController.dispose();
+    }
     super.dispose();
   }
 
@@ -103,29 +133,56 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
       return;
     }
 
-    // Validate JSON for POST, PUT, PATCH requests
+    // Validate body for POST‑like methods depending on mode
     if (['POST', 'PUT', 'PATCH'].contains(_selectedMethod)) {
-      final bodyText = _jsonBodyController.text.trim();
-      if (bodyText.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Request body is required for POST requests'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+      if (_bodyMode == BodyMode.json) {
+        final bodyText = _jsonBodyController.text.trim();
+        if (bodyText.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Request body is required for this method'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
+        if (!_isValidJson(bodyText)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Invalid JSON format. Please check your syntax.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+      } else if (_bodyMode == BodyMode.formData) {
+        final hasAnyField = _formFields.any(
+          (f) => f.keyController.text.trim().isNotEmpty,
         );
-        return;
-      }
-      
-      if (!_isValidJson(bodyText)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid JSON format. Please check your syntax.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
+        if (!hasAnyField) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Add at least one form field'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+      } else if (_bodyMode == BodyMode.raw) {
+        if (_rawBodyController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Raw body is empty'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
       }
     }
 
@@ -145,20 +202,34 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
       }
       requestProvider.setHeaders(headers);
       
-      // IMPORTANT FIX: Parse JSON and set as actual JSON object, not string
+      // Build body based on selected mode
       if (['POST', 'PUT', 'PATCH'].contains(_selectedMethod)) {
-        final bodyText = _jsonBodyController.text.trim();
-        if (bodyText.isNotEmpty) {
-          try {
-            // Parse the JSON to validate and get the actual object
-            final jsonBody = json.decode(bodyText);
-            // Set the body as the JSON object (will be stringified in the request)
-            requestProvider.setBody(json.encode(jsonBody));
-            developer.log('Sending JSON body: ${json.encode(jsonBody)}');
-          } catch (e) {
-            developer.log('Error parsing JSON: $e');
-            requestProvider.setBody(bodyText);
+        if (_bodyMode == BodyMode.json) {
+          final bodyText = _jsonBodyController.text.trim();
+          if (bodyText.isNotEmpty) {
+            try {
+              final jsonBody = json.decode(bodyText);
+              requestProvider.setBody(json.encode(jsonBody));
+              developer.log('Sending JSON body: ${json.encode(jsonBody)}');
+            } catch (e) {
+              developer.log('Error parsing JSON: $e');
+              requestProvider.setBody(bodyText);
+            }
           }
+        } else if (_bodyMode == BodyMode.formData) {
+          final Map<String, dynamic> formBody = {};
+          for (final f in _formFields) {
+            final key = f.keyController.text.trim();
+            final value = f.valueController.text;
+            if (key.isNotEmpty) {
+              formBody[key] = value;
+            }
+          }
+          requestProvider.setBody(json.encode(formBody));
+          developer.log('Sending form‑data body: $formBody');
+        } else if (_bodyMode == BodyMode.raw) {
+          requestProvider.setBody(_rawBodyController.text);
+          developer.log('Sending raw body: ${_rawBodyController.text}');
         }
       }
       
@@ -728,7 +799,7 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                           ),
                           if (_isBodyExpanded) ...[
                             const SizedBox(height: 16),
-                            // Format selector with Format button
+                            // Mode selector + actions
                             Row(
                               children: [
                                 Container(
@@ -740,110 +811,207 @@ class _RequestStudioScreenState extends State<RequestStudioScreen> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade900,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'JSON',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white,
-                                          ),
-                                        ),
+                                      _BodyModeChip(
+                                        label: 'JSON',
+                                        selected: _currentBodyMode == BodyMode.json,
+                                        onTap: () {
+                                          setState(() => _bodyMode = BodyMode.json);
+                                        },
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        'Form Data',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey.shade600,
-                                        ),
+                                      _BodyModeChip(
+                                        label: 'Form Data',
+                                        selected: _currentBodyMode == BodyMode.formData,
+                                        onTap: () {
+                                          setState(() => _bodyMode = BodyMode.formData);
+                                        },
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        'Raw',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey.shade600,
-                                        ),
+                                      _BodyModeChip(
+                                        label: 'Raw',
+                                        selected: _currentBodyMode == BodyMode.raw,
+                                        onTap: () {
+                                          setState(() => _bodyMode = BodyMode.raw);
+                                        },
                                       ),
                                     ],
                                   ),
                                 ),
                                 const Spacer(),
-                                // Format JSON button
-                                TextButton.icon(
-                                  onPressed: _formatJsonButton,
-                                  icon: Icon(Icons.format_align_left, size: 14, color: Colors.grey.shade700),
-                                  label: Text(
-                                    'Format JSON',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w500,
+                                if (_currentBodyMode == BodyMode.json)
+                                  TextButton.icon(
+                                    onPressed: _formatJsonButton,
+                                    icon: Icon(Icons.format_align_left, size: 14, color: Colors.grey.shade700),
+                                    label: Text(
+                                      'Format JSON',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     ),
                                   ),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 16),
-                            // JSON Body Editor
-                            Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: TextField(
-                                controller: _jsonBodyController,
-                                maxLines: 12,
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.all(16),
-                                  hintText: 'Enter JSON body...',
-                                  hintStyle: TextStyle(
+
+                            // Body editors based on mode
+                            if (_currentBodyMode == BodyMode.json) ...[
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: TextField(
+                                  controller: _jsonBodyController,
+                                  maxLines: 12,
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.all(16),
+                                    hintText: 'Enter JSON body...',
+                                    hintStyle: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade400,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade400,
                                     fontFamily: 'monospace',
+                                    color: Colors.grey.shade900,
                                   ),
                                 ),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                  color: Colors.grey.shade900,
-                                ),
                               ),
-                            ),
-                            if (!_isValidJson(_jsonBodyController.text) && _jsonBodyController.text.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.red.shade200),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.error_outline, size: 14, color: Colors.red.shade700),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Invalid JSON format',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.red.shade700,
-                                          fontWeight: FontWeight.w500,
+                              if (!_isValidJson(_jsonBodyController.text) && _jsonBodyController.text.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.error_outline, size: 14, color: Colors.red.shade700),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Invalid JSON format',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.red.shade700,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ] else if (_currentBodyMode == BodyMode.formData) ...[
+                              Column(
+                                children: [
+                                  ..._formFields.asMap().entries.map(
+                                    (entry) {
+                                      final index = entry.key;
+                                      final field = entry.value;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: field.keyController,
+                                                decoration: InputDecoration(
+                                                  hintText: 'Key',
+                                                  border: OutlineInputBorder(
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                                  ),
+                                                  isDense: true,
+                                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                                ),
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: TextField(
+                                                controller: field.valueController,
+                                                decoration: InputDecoration(
+                                                  hintText: 'Value',
+                                                  border: OutlineInputBorder(
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                                  ),
+                                                  isDense: true,
+                                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                                ),
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            IconButton(
+                                              icon: const Icon(Icons.close, size: 16),
+                                              tooltip: 'Remove',
+                                              onPressed: _formFields.length > 1
+                                                  ? () {
+                                                      setState(() {
+                                                        final removed = _formFields.removeAt(index);
+                                                        removed.keyController.dispose();
+                                                        removed.valueController.dispose();
+                                                      });
+                                                    }
+                                                  : null,
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _formFields.add(_FormFieldItem());
+                                        });
+                                      },
+                                      icon: const Icon(Icons.add, size: 14),
+                                      label: const Text(
+                                        'Add field',
+                                        style: TextStyle(fontSize: 11),
+                                      ),
                                     ),
-                                  ],
+                                  ),
+                                ],
+                              ),
+                            ] else if (_currentBodyMode == BodyMode.raw) ...[
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: TextField(
+                                  controller: _rawBodyController,
+                                  maxLines: 12,
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.all(16),
+                                    hintText: 'Enter raw request body (text, XML, etc.)...',
+                                    hintStyle: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade900,
+                                  ),
                                 ),
                               ),
                             ],
